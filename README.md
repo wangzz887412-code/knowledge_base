@@ -159,11 +159,12 @@ npm run dev
 ```bash
 # 下载小模型（推荐）
 ollama pull qwen2.5:0.5b
-ollama pull qwen3:0.8b
-ollama pull gemma2:2b
+ollama pull qwen3.5:0.8b
+ollama pull qwen3.5:2b
+ollama pull qwen3.5:4b
 
 # 或者下载更大的模型
-ollama pull qwen3:7b
+ollama pull qwen3.5:9b
 ollama pull deepseek-r1:7b
 ```
 
