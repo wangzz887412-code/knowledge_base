@@ -1,0 +1,14 @@
+Django
+djangorestframework
+django-cors-headers
+celery
+redis
+psycopg2-binary
+python-dotenv
+python-docx
+PyPDF2
+python-pptx
+Pillow
+chromadb
+openai
+requests

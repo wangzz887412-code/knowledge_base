@@ -1,0 +1,322 @@
+[97388] 25 May 10:45:30.497 * 1 changes in 3600 seconds. Saving...
+[97388] 25 May 10:45:30.508 # BeginForkOperation: system error caught. error code=0x00000002, message=Problem creating slave process: The system cannot find the file specified.
+[97388] 25 May 10:45:30.509 # Can't save in background: fork: operation would block
+
+
+=== MEMURAI BUG REPORT START: Cut & paste starting from here ===
+Memurai version: 8.1.240
+[97388] 25 May 10:45:30.622 # ------------------------------------------------
+[97388] 25 May 10:45:30.623 # Fatal Error: Unknown RDB child type. #D:\a\1\s\src\rdb.c:3866
+
+------ INFO OUTPUT ------
+# Server
+memurai_version:8.1.240
+redis_version:8.2.5
+redis_mode:standalone
+os:Windows Client 10.0.26200 
+arch_bits:64
+vp:yes
+monotonic_clock:Windows QueryPerformanceCounter
+multiplexing_api:WinSock_IOCP
+atomicvar_api:c11-builtin
+service_name:Memurai
+process_id:97388
+process_supervised:no
+run_id:f99630d25407f2ba9c2b920afde795f62691ed7d
+tcp_port:6379
+server_time_usec:1779677130612598
+uptime_in_seconds:4005
+uptime_in_days:0
+hz:10
+configured_hz:10
+lru_clock:1292234
+executable:D:/trae/knowledge_base2.0/memurai.exe
+config_file:D:/trae/knowledge_base2.0//memurai.conf
+io_threads_active:0
+listener0:name=tcp,bind=127.0.0.1,port=6379
+
+# License
+license_version:1.0
+license_id:e17b4bc4-2a56-47de-a2e5-448f505ade57
+licensed_to:Memurai DEV Team
+allowed_production_use:no
+distribution_type:transferable
+creation_time:2026-03-18 06:59:02
+valid_from:2026-03-16 07:00:00
+valid_until:2030-03-16 07:00:00
+
+# Clients
+connected_clients:3
+cluster_connections:0
+maxclients:10000
+client_recent_max_input_buffer:32
+client_recent_max_output_buffer:0
+blocked_clients:0
+tracking_clients:0
+pubsub_clients:0
+watching_clients:0
+clients_in_timeout_table:0
+total_watched_keys:0
+total_blocking_keys:0
+total_blocking_keys_on_nokey:0
+
+# Memory
+used_memory:678424
+used_memory_human:662.52K
+used_memory_rss:691880
+used_memory_rss_human:675.66K
+used_memory_peak:692088
+used_memory_peak_human:675.87K
+used_memory_peak_time:1779677130
+used_memory_peak_perc:98.03%
+used_memory_overhead:573016
+used_memory_startup:496392
+used_memory_dataset:105408
+used_memory_dataset_perc:57.91%
+allocator_allocated:1772576
+allocator_active:2007040
+allocator_resident:7217152
+allocator_muzzy:0
+total_system_memory:17179869184
+total_system_memory_human:16.00G
+used_memory_lua:32768
+used_memory_vm_eval:32768
+used_memory_lua_human:32.00K
+used_memory_scripts_eval:0
+number_of_cached_scripts:0
+number_of_functions:0
+number_of_libraries:0
+used_memory_vm_functions:33792
+used_memory_vm_total:66560
+used_memory_vm_total_human:65.00K
+used_memory_functions:192
+used_memory_scripts:192
+used_memory_scripts_human:192B
+maxmemory:8589934592
+maxmemory_human:8.00G
+maxmemory_policy:noeviction
+allocator_frag_ratio:1.12
+allocator_frag_bytes:158432
+allocator_rss_ratio:3.60
+allocator_rss_bytes:5210112
+rss_overhead_ratio:0.10
+rss_overhead_bytes:-6525272
+mem_fragmentation_ratio:1.00
+mem_fragmentation_bytes:0
+mem_not_counted_for_evict:0
+mem_replication_backlog:0
+mem_total_replication_buffers:0
+mem_replica_full_sync_buffer:0
+mem_clients_slaves:0
+mem_clients_normal:6912
+mem_cluster_links:0
+mem_aof_buffer:0
+mem_allocator:jemalloc-5.3.0
+mem_overhead_db_hashtable_rehashing:0
+active_defrag_running:0
+lazyfree_pending_objects:0
+lazyfreed_objects:0
+
+# Persistence
+loading:0
+async_loading:0
+current_cow_peak:0
+current_cow_size:0
+current_cow_size_age:0
+current_fork_perc:0.00
+current_save_keys_processed:0
+current_save_keys_total:1
+rdb_changes_since_last_save:1
+rdb_bgsave_in_progress:1
+rdb_last_save_time:1779673125
+rdb_last_bgsave_status:err
+rdb_last_bgsave_time_sec:-1
+rdb_current_bgsave_time_sec:1779677131
+rdb_saves:1
+rdb_last_cow_size:0
+rdb_last_load_keys_expired:0
+rdb_last_load_keys_loaded:0
+aof_enabled:0
+aof_rewrite_in_progress:0
+aof_rewrite_scheduled:0
+aof_last_rewrite_time_sec:-1
+aof_current_rewrite_time_sec:-1
+aof_last_bgrewrite_status:ok
+aof_rewrites:0
+aof_rewrites_consecutive_failures:0
+aof_last_write_status:ok
+aof_last_cow_size:0
+module_fork_in_progress:0
+module_fork_last_cow_size:0
+
+# Threads
+io_thread_0:clients=3,reads=16,writes=13
+
+# Stats
+total_connections_received:6
+total_commands_processed:18
+instantaneous_ops_per_sec:5
+total_net_input_bytes:904
+total_net_output_bytes:130
+total_net_repl_input_bytes:0
+total_net_repl_output_bytes:0
+instantaneous_input_kbps:0.34
+instantaneous_output_kbps:0.04
+instantaneous_input_repl_kbps:0.00
+instantaneous_output_repl_kbps:0.00
+rejected_connections:0
+sync_full:0
+sync_partial_ok:0
+sync_partial_err:0
+expired_subkeys:0
+expired_keys:0
+expired_stale_perc:0.00
+expired_time_cap_reached_count:0
+expire_cycle_cpu_milliseconds:78
+evicted_keys:0
+evicted_clients:0
+evicted_scripts:0
+total_eviction_exceeded_time:0
+current_eviction_exceeded_time:0
+keyspace_hits:0
+keyspace_misses:4
+pubsub_channels:0
+pubsub_patterns:0
+pubsubshard_channels:0
+latest_fork_usec:0
+total_forks:1
+migrate_cached_sockets:0
+slave_expires_tracked_keys:0
+active_defrag_hits:0
+active_defrag_misses:0
+active_defrag_key_hits:0
+active_defrag_key_misses:0
+total_active_defrag_time:0
+current_active_defrag_time:0
+tracking_total_keys:0
+tracking_total_items:0
+tracking_total_prefixes:0
+unexpected_error_replies:0
+total_error_replies:0
+dump_payload_sanitizations:0
+total_reads_processed:16
+total_writes_processed:13
+io_threaded_reads_processed:0
+io_threaded_writes_processed:0
+io_threaded_total_prefetch_batches:0
+io_threaded_total_prefetch_entries:0
+client_query_buffer_limit_disconnections:0
+client_output_buffer_limit_disconnections:0
+reply_buffer_shrinks:3
+reply_buffer_expands:0
+eventloop_cycles:36313
+eventloop_duration_sum:18842510
+eventloop_duration_cmd_sum:2004
+instantaneous_eventloop_cycles_per_sec:11
+instantaneous_eventloop_duration_usec:2103
+acl_access_denied_auth:0
+acl_access_denied_cmd:0
+acl_access_denied_key:0
+acl_access_denied_channel:0
+
+# Replication
+role:master
+connected_slaves:0
+master_failover_state:no-failover
+master_replid:50b7a01e1b6af09ac1d5b58861c7d37bd6af17c8
+master_replid2:0000000000000000000000000000000000000000
+master_repl_offset:0
+second_repl_offset:-1
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+# CPU
+used_cpu_sys:8.859375
+used_cpu_user:14.421875
+used_cpu_sys_children:0.000000
+used_cpu_user_children:0.000000
+
+# Modules
+
+# Commandstats
+cmdstat_multi:calls=1,usec=1,usec_per_call=1.00,rejected_calls=0,failed_calls=0
+cmdstat_ping:calls=5,usec=16,usec_per_call=3.20,rejected_calls=0,failed_calls=0
+cmdstat_llen:calls=4,usec=352,usec_per_call=88.00,rejected_calls=0,failed_calls=0
+cmdstat_exec:calls=1,usec=367,usec_per_call=367.00,rejected_calls=0,failed_calls=0
+cmdstat_sadd:calls=1,usec=811,usec_per_call=811.00,rejected_calls=0,failed_calls=0
+cmdstat_client|setinfo:calls=6,usec=809,usec_per_call=134.83,rejected_calls=0,failed_calls=0
+
+# Errorstats
+
+# Latencystats
+latency_percentiles_usec_multi:p50=1.003,p99=1.003,p99.9=1.003
+latency_percentiles_usec_ping:p50=3.007,p99=7.007,p99.9=7.007
+latency_percentiles_usec_llen:p50=0.001,p99=352.255,p99.9=352.255
+latency_percentiles_usec_exec:p50=368.639,p99=368.639,p99.9=368.639
+latency_percentiles_usec_sadd:p50=811.007,p99=811.007,p99.9=811.007
+latency_percentiles_usec_client|setinfo:p50=1.003,p99=802.815,p99.9=802.815
+
+# Cluster
+cluster_enabled:0
+
+# Keyspace
+db0:keys=1,expires=0,avg_ttl=0,subexpiry=0
+
+# Keysizes
+db0_distrib_sets_items:1=1
+
+------ CLIENT LIST OUTPUT ------
+id=6 addr=127.0.0.1:31256 laddr=127.0.0.1:6379 fd=9 name= age=4 idle=4 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 watch=0 qbuf=0 qbuf-free=0 argv-mem=0 multi-mem=0 rbs=1024 rbp=7 obl=0 oll=0 omem=0 tot-mem=2304 events=r cmd=ping user=default redir=-1 resp=2 lib-name=redis-py lib-ver=7.4.0 io-thread=0 tot-net-in=124 tot-net-out=17 tot-cmds=3
+id=7 addr=127.0.0.1:48317 laddr=127.0.0.1:6379 fd=10 name= age=2 idle=2 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 watch=0 qbuf=0 qbuf-free=0 argv-mem=0 multi-mem=0 rbs=1024 rbp=0 obl=0 oll=0 omem=0 tot-mem=2304 events=r cmd=ping user=default redir=-1 resp=2 lib-name=redis-py lib-ver=7.4.0 io-thread=0 tot-net-in=124 tot-net-out=17 tot-cmds=3
+id=8 addr=127.0.0.1:48321 laddr=127.0.0.1:6379 fd=11 name= age=0 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 watch=0 qbuf=0 qbuf-free=0 argv-mem=0 multi-mem=0 rbs=1024 rbp=0 obl=0 oll=0 omem=0 tot-mem=2304 events=r cmd=sadd user=default redir=-1 resp=2 lib-name=redis-py lib-ver=7.4.0 io-thread=0 tot-net-in=614 tot-net-out=75 tot-cmds=9
+
+------ MODULES INFO OUTPUT ------
+
+------ CONFIG DEBUG OUTPUT ------
+slave-read-only yes
+lazyfree-lazy-server-del no
+lazyfree-lazy-eviction no
+activedefrag no
+replica-read-only yes
+client-query-buffer-limit 1gb
+proto-max-bulk-len 512mb
+repl-diskless-sync no
+lazyfree-lazy-user-del no
+lazyfree-lazy-expire no
+repl-diskless-load disabled
+io-threads 1
+lazyfree-lazy-user-flush no
+sanitize-dump-payload no
+list-compress-depth 0
+[97388] 25 May 10:45:30.635 # --- ABORT
+[97388] 25 May 10:45:30.636 # --- STACK TRACE
+memurai.exe!OPENSSL_Applink((null):0)(0x00000016, 0x00000000, 0x140074D90, 0x14037EA60)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000016, 0x140090C1A, 0x00000001, 0x00000016)
+memurai.exe!OPENSSL_Applink((null):0)(0xE5E4F3632A01, 0x00000000, 0x00000001, 0x00000F1A)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000008, 0x7FCDABE5B3CB, 0x00000001, 0x00000000)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000280, 0x140348068, 0x0129F400, 0x14035DC38)
+memurai.exe!OPENSSL_Applink((null):0)(0x1DCEBF08D181484, 0x00000000, 0x14035DC50, 0x00000001)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000000, 0x00000000, 0x00000000, 0x00000082)
+memurai.exe!OPENSSL_Applink((null):0)(0xFFFFFFFF, 0x00000000, 0x00000000, 0x00000010)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000018, 0x7FCDABE2C4C0, 0x7FCDABE35150, 0x190000000A)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000000, 0x7FCDABE35150, 0x00000000, 0x00000000)
+memurai.exe!OPENSSL_Applink((null):0)(0x1869700000000, 0x7FCDABFF4000, 0x0129F8D0, 0x14039AAB0)
+memurai.exe!OPENSSL_Applink((null):0)(0x7FF9A5350000, 0x00000000, 0x7FF9A5350000, 0x00594D00)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000001, 0x00594D00, 0x00000002, 0x00000000)
+memurai.exe!OPENSSL_Applink((null):0)(0x005899D0, 0x00594D00, 0x00000000, 0x00000000)
+memurai.exe!OPENSSL_Applink((null):0)(0x00000000, 0x00000000, 0x00000000, 0x00000000)
+KERNEL32.DLL!BaseThreadInitThunk((null):0)(0x00000000, 0x00000000, 0x4F0FFFFFB30, 0x4D0FFFFFB30)
+ntdll.dll!RtlUserThreadStart((null):0)(0x00000000, 0x00000000, 0x00000000, 0x00000000)
+ntdll.dll!RtlUserThreadStart((null):0)(0x00000000, 0x00000000, 0x00000000, 0x00000000)
+[97388] 25 May 10:45:30.652 # 
+=== MEMURAI BUG REPORT END. Make sure to include from START to END. ===
+
+       Please report this bug by following the instructions at:
+
+     https://support.memurai.com/report
+
+    Suspect RAM error? Use memurai --test-memory to verify it.
+
+

@@ -1,0 +1,63 @@
+# 虚拟环境
+venv/
+.env/
+.env.*
+!.env.example
+
+# 数据库文件
+PostgreSQL/
+*.db
+*.sqlite3
+
+# 媒体文件（上传的文件）
+backend/media/
+uploads/
+
+# 向量数据库
+backend/chroma_db/
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# 构建输出
+dist/
+build/
+*.min.js
+
+# 日志文件
+*.log
+logs/
+
+# 编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# SSL证书
+*.pem
+*.key
+*.crt
+
+# 环境变量
+.env
+.env.local
+.env.production
+
+# Docker
+docker-compose.override.yml
