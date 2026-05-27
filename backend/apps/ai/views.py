@@ -149,6 +149,7 @@ class AIChatView(APIView):
             message = request.data.get('message', '')
             file_ids = request.data.get('file_ids', [])
             chat_id = request.data.get('chat_id')
+            kb_doc_ids = request.data.get('kb_doc_ids', [])
             
             if not message:
                 return Response({
@@ -170,6 +171,20 @@ class AIChatView(APIView):
                     title=message[:50] if len(message) > 50 else message
                 )
             
+            # 在创建当前消息之前，先构建对话历史上下文
+            conversation_history = []
+            if chat_id:
+                recent_messages = ChatMessage.objects.filter(
+                    chat_history=chat_history
+                ).order_by('-created_at')[:40]
+                recent_messages = list(reversed(recent_messages))
+                for msg in recent_messages:
+                    conversation_history.append({
+                        'role': msg.role,
+                        'content': msg.content
+                    })
+                logger.info(f"[AI_CHAT] 加载了 {len(conversation_history)} 条历史消息作为上下文")
+            
             ChatMessage.objects.create(
                 chat_history=chat_history,
                 role='user',
@@ -177,40 +192,93 @@ class AIChatView(APIView):
                 file_ids=file_ids
             )
             
+            # AI助手模式：完全独立于知识库，不使用知识库的文件
+            # 只处理图片上传（如果有的话），直接使用用户消息进行自由回答
             File = apps.get_model('files', 'File')
-            relevant_files = []
+            image_data = None
             
             if file_ids:
-                relevant_files = File.objects.filter(
+                # 获取用户上传的所有文件（图片和非图片）
+                from django.db.models import Q
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+                q = Q()
+                for ext in image_extensions:
+                    q |= Q(filename__iendswith=ext)
+                
+                image_files = File.objects.filter(
+                    q,
                     id__in=file_ids,
                     user=request.user
                 )
-            
-            # 构建完整的文档上下文
-            context = ''
-            if relevant_files:
-                context = "【参考文档内容】\n\n"
-                for idx, file_obj in enumerate(relevant_files, 1):
-                    context += f"文档 {idx}: {file_obj.filename}\n"
-                    if file_obj.ai_summary:
-                        context += f"摘要: {file_obj.ai_summary}\n"
-                    if file_obj.extracted_text:
-                        # 限制每个文档的文本长度，避免超出模型上下文限制
-                        text = file_obj.extracted_text[:4000]
-                        context += f"正文:\n{text}\n"
-                    context += "\n" + "="*50 + "\n\n"
                 
-                context += "【用户问题】\n" + message + "\n\n"
-                context += "【回答要求】\n"
-                context += "1. 请基于上述参考文档内容回答用户问题\n"
-                context += "2. 如果文档中有明确答案，请引用相关原文\n"
-                context += "3. 如果文档中没有相关信息，请明确说明\n"
-                context += "4. 回答要准确、简洁、有条理\n"
+                # 读取第一张图片的base64数据
+                for file_obj in image_files[:1]:
+                    if file_obj.file and file_obj.file.path:
+                        file_path = file_obj.file.path
+                        try:
+                            import base64
+                            with open(file_path, 'rb') as f:
+                                image_bytes = f.read()
+                                ext = file_path.split('.')[-1].lower()
+                                if ext == 'jpg':
+                                    ext = 'jpeg'
+                                image_data = f"data:image/{ext};base64,{base64.b64encode(image_bytes).decode()}"
+                                logger.info(f"[AI_CHAT] 读取图片成功: {file_path}, size={len(image_bytes)}")
+                        except Exception as e:
+                            logger.error(f"[AI_CHAT] 读取图片文件失败: {e}")
             
+            # AI助手直接使用用户消息，不构建任何文档上下文，自由回答
             model_id = request.user.get_chat_model_id()
-            api_key = request.user.get_api_key()
             
-            response_data = self._generate_response(message, context, model_id, api_key)
+            # 构建聊天prompt：包含用户消息
+            chat_prompt = message
+            
+            # 知识库文档引用：将选定的知识库文档内容作为参考上下文
+            if kb_doc_ids:
+                try:
+                    kb_files = File.objects.filter(
+                        id__in=kb_doc_ids,
+                        user=request.user,
+                        source='knowledge_base'
+                    )
+                    if kb_files.exists():
+                        kb_context_parts = ['\n\n【参考知识库文档】\n']
+                        for doc in kb_files:
+                            if doc.extracted_text:
+                                kb_context_parts.append(f'\n--- 文档: {doc.filename} ---\n{doc.extracted_text[:5000]}\n')
+                            elif doc.ai_summary:
+                                kb_context_parts.append(f'\n--- 文档: {doc.filename} (摘要) ---\n{doc.ai_summary}\n')
+                        kb_context = ''.join(kb_context_parts)
+                        chat_prompt = message + kb_context
+                        logger.info(f"[AI_CHAT] 已附加 {kb_files.count()} 个知识库文档作为参考上下文")
+                except Exception as e:
+                    logger.warning(f"[AI_CHAT] 获取知识库文档引用失败: {e}")
+            
+            # 如果有非图片的文件（文档），提取文本追加到prompt中
+            if file_ids:
+                all_uploaded_files = File.objects.filter(id__in=file_ids, user=request.user)
+                non_image_files = all_uploaded_files.exclude(q)
+                if non_image_files.exists():
+                    chat_prompt += "\n\n【上传的文件内容】\n"
+                    for doc in non_image_files:
+                        if doc.extracted_text:
+                            text = doc.extracted_text[:3000]
+                            chat_prompt += f"\n--- 文件: {doc.filename} ---\n{text}\n"
+                        elif doc.ai_summary:
+                            chat_prompt += f"\n--- 文件: {doc.filename} (摘要) ---\n{doc.ai_summary}\n"
+            
+            # 获取对应提供商的API Key
+            api_key = ''
+            try:
+                from .services import ai_service
+                model_config = ai_service.get_model_config(model_id)
+                if model_config and model_config.requires_api_key:
+                    api_key = request.user.get_provider_api_key(model_config.provider)
+            except:
+                api_key = request.user.get_api_key()
+            
+            # 直接发送用户消息，让AI自由回答
+            response_data = self._generate_response(chat_prompt, '', model_id, api_key, image_data, conversation_history)
             
             # 处理返回结果（可能是字符串错误消息或字典）
             if isinstance(response_data, dict):
@@ -251,6 +319,29 @@ class AIChatView(APIView):
     def delete(self, request):
         try:
             chat_id = request.query_params.get('chat_id')
+            message_id = request.query_params.get('message_id')
+            
+            if message_id:
+                try:
+                    message = ChatMessage.objects.get(id=message_id)
+                    if message.chat_history.user != request.user:
+                        return Response({
+                            'error': '无权限删除此消息',
+                            'code': 'NO_PERMISSION'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                    
+                    message.delete()
+                    
+                    return Response({
+                        'success': True,
+                        'message': '消息已删除',
+                        'message_id': message_id
+                    })
+                except ChatMessage.DoesNotExist:
+                    return Response({
+                        'error': '消息不存在',
+                        'code': 'MESSAGE_NOT_FOUND'
+                    }, status=status.HTTP_404_NOT_FOUND)
             
             if not chat_id:
                 return Response({
@@ -279,7 +370,7 @@ class AIChatView(APIView):
                 'code': 'DELETE_CHAT_ERROR'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def _generate_response(self, message, context, model_id, api_key):
+    def _generate_response(self, message, context, model_id, api_key, image_data=None, conversation_history=None):
         """使用AI模型生成回复"""
         from .services import ai_service
         
@@ -293,6 +384,9 @@ class AIChatView(APIView):
             ai_config = self.request.user.ai_config or {}
             enable_thinking = ai_config.get('enable_thinking', False)
             
+            # 判断是否需要启用视觉功能
+            enable_vision = bool(image_data) and model_config and model_config.supports_vision
+            
             # 如果有文档上下文，直接使用；否则只发送用户消息
             if context:
                 prompt = context
@@ -301,11 +395,14 @@ class AIChatView(APIView):
             
             result = ai_service.extract_text_with_ai(
                 content=prompt,
+                image_data=image_data,
                 model_id=model_id,
                 api_key=api_key,
                 mode='enhanced',
                 enable_thinking=enable_thinking,
-                task_type='chat'  # 使用聊天模式的系统提示
+                enable_vision=enable_vision,
+                task_type='chat',  # 使用聊天模式的系统提示
+                conversation_history=conversation_history
             )
             
             if result.get('success') and result.get('text'):
@@ -787,12 +884,20 @@ class AIConfigView(APIView):
             chat_model = next((m for m in available_models if m['model_id'] == chat_model_id), None)
             document_model = next((m for m in available_models if m['model_id'] == document_model_id), None)
             
+            # 获取所有API Keys（按提供商）
+            api_keys = ai_config.get('api_keys', {})
+            # 兼容旧格式
+            if 'api_key' in ai_config and not api_keys:
+                # 尝试推断提供商
+                api_keys['Zhipu'] = ai_config.get('api_key', '')
+            
             config = {
                 'chat_model_id': chat_model_id,
                 'chat_model_name': chat_model['name'] if chat_model else chat_model_id,
                 'document_model_id': document_model_id,
                 'document_model_name': document_model['name'] if document_model else document_model_id,
-                'api_key': ai_config.get('api_key', ''),
+                'api_key': '',  # 不再返回单个API Key
+                'api_keys': api_keys,  # 返回所有API Keys
                 'enable_vision': ai_config.get('enable_vision', False),
                 'enable_thinking': ai_config.get('enable_thinking', False)
             }
@@ -817,7 +922,7 @@ class AIConfigView(APIView):
         try:
             chat_model_id = request.data.get('chat_model_id')
             document_model_id = request.data.get('document_model_id')
-            api_key = request.data.get('api_key', request.user.ai_config.get('api_key', ''))
+            api_keys = request.data.get('api_keys', {})
             enable_vision = request.data.get('enable_vision', False)
             enable_thinking = request.data.get('enable_thinking', False)
             
@@ -841,13 +946,22 @@ class AIConfigView(APIView):
             
             current_config = request.user.ai_config or {}
             
+            # 更新API Keys
+            current_api_keys = current_config.get('api_keys', {})
+            if isinstance(api_keys, dict):
+                current_api_keys.update(api_keys)
+            
             updated_config = {
                 'chat_model_id': chat_model_id or current_config.get('chat_model_id', current_config.get('model_id', 'glm-4-flash-250414')),
                 'document_model_id': document_model_id or current_config.get('document_model_id', current_config.get('model_id', 'glm-4-flash-250414')),
-                'api_key': api_key,
+                'api_keys': current_api_keys,
                 'enable_vision': enable_vision,
                 'enable_thinking': enable_thinking
             }
+            
+            # 保留旧格式的api_key以便兼容（但不再使用）
+            if 'api_key' in current_config:
+                updated_config['api_key'] = current_config['api_key']
             
             request.user.ai_config = updated_config
             request.user.save()
@@ -863,6 +977,7 @@ class AIConfigView(APIView):
                     'document_model_id': updated_config['document_model_id'],
                     'document_model_name': next((m['name'] for m in available_models if m['model_id'] == updated_config['document_model_id']), updated_config['document_model_id']),
                     'api_key': '',
+                    'api_keys': {},  # 不返回API Keys
                     'enable_vision': enable_vision,
                     'enable_thinking': enable_thinking
                 }

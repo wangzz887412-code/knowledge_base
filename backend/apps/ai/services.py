@@ -49,6 +49,7 @@ class AIModelConfig:
     requires_api_key: bool
     supports_vision: bool
     max_tokens: int
+    context_window: int = 128000
     supports_streaming: bool = False
     supports_thinking: bool = False
 
@@ -62,6 +63,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -73,6 +75,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -85,6 +88,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=False,  # 纯文本，无视觉
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -97,6 +101,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,  # 多模态，有视觉
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -109,6 +114,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=False,  # 纯文本，无视觉
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -121,6 +127,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,  # 多模态，有视觉
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -133,6 +140,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,  # 多模态，有视觉
         max_tokens=8192,
+        context_window=128000,
         supports_streaming=True,
         supports_thinking=True
     ),
@@ -144,6 +152,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=True,
         max_tokens=8192,
+        context_window=8192,
         supports_streaming=True
     ),
     AIModelConfig(
@@ -154,6 +163,7 @@ SUPPORTED_MODELS: List[AIModelConfig] = [
         requires_api_key=True,
         supports_vision=False,
         max_tokens=4096,
+        context_window=8192,
         supports_streaming=True
     )
 ]
@@ -172,7 +182,9 @@ class AIModelService:
                 'provider': m.provider,
                 'supports_vision': m.supports_vision,
                 'requires_api_key': m.requires_api_key,
-                'supports_thinking': m.supports_thinking
+                'supports_thinking': m.supports_thinking,
+                'max_tokens': m.max_tokens,
+                'context_window': m.context_window
             }
             for m in SUPPORTED_MODELS
         ]
@@ -190,7 +202,9 @@ class AIModelService:
                     'provider': 'Ollama',
                     'supports_vision': model.get('details', {}).get('family') in ['llava'],
                     'requires_api_key': False,
-                    'supports_thinking': supports_thinking
+                    'supports_thinking': supports_thinking,
+                    'max_tokens': 4096,
+                    'context_window': 4096
                 })
         except Exception as e:
             logger.info(f'Ollama not available: {e}')
@@ -370,7 +384,8 @@ class AIModelService:
         mode: str = 'basic',
         enable_vision: bool = False,
         task_type: str = 'extract',
-        enable_thinking: bool = False
+        enable_thinking: bool = False,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         config = self.get_model_config(model_id)
         
@@ -394,7 +409,8 @@ class AIModelService:
                 enable_vision=enable_vision and config.supports_vision,
                 model_id=model_id,
                 task_type=task_type,
-                enable_thinking=enable_thinking
+                enable_thinking=enable_thinking,
+                conversation_history=conversation_history
             )
             
             if result['success']:
@@ -432,9 +448,10 @@ class AIModelService:
         enable_vision: bool,
         model_id: str,
         task_type: str = 'extract',
-        enable_thinking: bool = False
+        enable_thinking: bool = False,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        messages = self._build_messages(content, image_data, enable_vision, task_type)
+        messages = self._build_messages(content, image_data, enable_vision, task_type, conversation_history)
         
         headers = {
             'Content-Type': 'application/json'
@@ -452,29 +469,31 @@ class AIModelService:
         
         # Ollama需要特殊处理
         is_ollama = config.provider == 'Ollama'
+        is_zhipu = config.provider == 'Zhipu'
         final_model_id = model_id.replace('ollama:', '') if is_ollama else config.model_id
         
-        payload = {
-            'model': final_model_id,
-            'messages': messages,
-            'max_tokens': config.max_tokens,
-            'temperature': 0.3,
-            'stream': False
-        }
+        # 智谱API使用最小必要参数，避免兼容性问题
+        if is_zhipu:
+            payload = {
+                'model': final_model_id,
+                'messages': messages,
+                'stream': False
+            }
+            # 仅在智谱模型实际支持时才添加 max_tokens，避免错误
+            # 先不添加，看是否能解决问题
+        else:
+            payload = {
+                'model': final_model_id,
+                'messages': messages,
+                'max_tokens': config.max_tokens,
+                'temperature': 0.3,
+                'stream': False
+            }
         
-        # 如果是支持思考的模型，添加思考参数
-        if enable_thinking:
-            if is_ollama or 'qwen' in model_id.lower() or 'gemma' in model_id.lower():
-                payload['think'] = True  # Ollama/通义千问支持的思考参数
-            elif config.provider == 'Zhipu' and config.supports_thinking:
-                # 智谱思考参数（GLM-4系列支持思考）
-                # 不同模型可能使用不同参数，尝试多种可能
-                if 'thinking' in model_id.lower():
-                    # 思考模型可能使用不同的参数
-                    payload['reasoning_effort'] = 'medium'
-                else:
-                    # 普通模型尝试开启思考
-                    payload['thinking'] = True
+        # 智谱API目前不支持自定义思考参数，避免传递导致API错误
+        # 仅对Ollama和其他明确支持思考的模型添加思考参数
+        if enable_thinking and is_ollama:
+            payload['think'] = True  # 仅Ollama本地模型使用思考参数
         
         response = requests.post(
             f'{config.api_base}/chat/completions',
@@ -533,25 +552,109 @@ class AIModelService:
         content: str,
         image_data: Optional[str],
         enable_vision: bool,
-        task_type: str = 'extract'
+        task_type: str = 'extract',
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
+        user_message = {
+            'role': 'user',
+            'content': content
+        }
+        
         if task_type == 'summarize':
-            system_prompt = """你是一个专业的文档摘要助手。请根据用户的要求对文档内容进行详细总结。
-要求：
-1. 深入分析文档内容，提取核心观点、关键数据和重要结论
-2. 保持结构清晰，分点阐述但不要使用列表格式
-3. 涵盖以下方面：文档主题、核心论点、研究方法（如适用）、主要发现、结论与建议
-4. 摘要长度应在300-500字之间，内容详实丰富
-5. 使用中文输出，语言流畅自然
-6. 不要添加额外的解释或说明"""
+            system_prompt = """你是一位专业的文档总结专家。请为以下文档撰写一份结构清晰、视觉美观的摘要。
+
+请严格按照以下Markdown格式输出：
+
+# 📄 文档核心摘要
+
+## 一句话概述
+用1-2句话概括文档的核心主题和价值
+
+## 核心要点
+使用简洁的列表形式，列出4-6个最重要的观点或发现：
+- 第一个核心要点
+- 第二个核心要点
+- 第三个核心要点
+- ...
+
+## 关键概念
+列出文档中出现的核心术语和重要概念，用简洁的语言解释：
+- **概念A**：简短解释
+- **概念B**：简短解释
+- **概念C**：简短解释
+
+## 详细内容
+用自然段落形式详细展开文档的核心内容，包括：
+1. 背景与目的
+2. 主要内容和方法
+3. 重要发现或结论
+4. 实际应用或意义
+
+## 总结
+用一段话总结文档的精髓和价值
+
+写作规范：
+- 使用优雅的Markdown格式
+- 适当使用emoji增加可读性（📌、💡、🎯等）
+- 语言精炼优美，避免冗余
+- 重点突出，层次分明
+- 便于快速阅读和理解"""
         elif task_type == 'mindmap':
-            system_prompt = """你是一个专业的思维导图生成助手。请分析文档内容，提取关键知识点并构建思维导图结构。
-要求：
-1. 根节点：摘要的核心主题（5字以内）
-2. 子节点：直接相关的要点或概念（3-7个）
-3. 连接关系：通过children字段表示父子联系，如有交叉联系可在节点name中用"→"或括号标注
-4. 每个节点必须包含name，可以有children（没有则省略children字段）
-5. 只输出JSON，不要解释或代码块标记"""
+            system_prompt = """你是一位资深的知识架构师，擅长将复杂的文档内容转化为结构清晰、视觉美观的思维导图。
+
+请按照以下三个步骤进行：
+
+**第一步：深度理解文档**
+- 仔细阅读全文，把握整体脉络
+- 识别核心主题、重要概念、关键论点
+- 理解各部分之间的逻辑关系
+
+**第二步：构建知识框架**
+将知识点归入以下五大类别：
+- 🔷 定义概念：核心术语和基础定义
+- ⚡ 核心原理：支撑理论和技术基础
+- 🛠️ 方法技术：实现方式和操作步骤
+- 🌐 应用场景：实际应用和使用案例
+- 🔗 关联知识：相关领域的交叉知识
+
+**第三步：生成导图JSON**
+严格按照以下JSON格式输出（只输出JSON，不要任何解释）：
+```json
+{
+  "id": "root",
+  "name": "文档核心主题",
+  "children": [
+    {
+      "id": "concept",
+      "name": "🔷 定义概念",
+      "children": [
+        {"id": "concept_1", "name": "概念A"},
+        {"id": "concept_2", "name": "概念B"}
+      ]
+    },
+    {
+      "id": "principle", 
+      "name": "⚡ 核心原理",
+      "children": [
+        {"id": "principle_1", "name": "原理A"},
+        {"id": "principle_2", "name": "原理B"}
+      ]
+    }
+  ]
+}
+```
+
+**质量标准：**
+- 📊 穷尽性：覆盖文档所有重要概念
+- 🎯 简洁性：节点名称控制在10字以内
+- 🔗 逻辑性：上下级关系清晰明确
+- 💡 可读性：使用通俗易懂的语言
+
+**节点ID命名规范：**
+- 根节点：root
+- 一级节点：concept, principle, method, application, relation
+- 二级节点：{类型}_{序号}，如 concept_1, principle_1
+- 三级节点：{类型}_{父节点序号}_{序号}，如 concept_1_1"""
         elif task_type == 'analyze':
             system_prompt = """你是一个专业的文档分析助手。请对文档内容进行全面深入的分析。
 要求：
@@ -572,13 +675,30 @@ class AIModelService:
 3. 关系类型包括：related_to（相关）、causes（导致）、contrasts_with（对比）、similar_to（相似）、part_of（部分）、implies（蕴含）
 4. 只输出JSON，不要添加任何额外解释或说明"""
         elif task_type == 'chat':
-            # 聊天对话模式的系统提示
-            system_prompt = """你是一个智能助手，可以帮助用户回答各种问题、进行对话交流。
-要求：
-1. 友好、专业、有帮助地回答用户的问题
-2. 回答要简洁明了，重点突出
-3. 如果需要更多信息，请明确询问用户
-4. 使用中文回复，保持自然流畅的对话风格"""
+            # 聊天模式：系统提示极简，让AI自由回答
+            system_prompt = """你是一个智能、有帮助的AI助手。请自由、自然地与用户对话，根据用户的输入提供准确、有用的回答。"""
+            # 处理聊天模式的图片输入：把用户的问题和图片一起发给AI
+            if enable_vision and image_data:
+                user_message = {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': content
+                        },
+                        {
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': image_data
+                            }
+                        }
+                    ]
+                }
+            else:
+                user_message = {
+                    'role': 'user',
+                    'content': content
+                }
         else:
             system_prompt = """你是一个专业的文档内容提取助手。请从给定的文本/图像中准确提取所有文字内容。
 要求：
@@ -587,33 +707,42 @@ class AIModelService:
 3. 清理多余的空白字符，但保持可读性
 4. 如果是表格数据，尽量保持表格结构
 5. 只输出提取的文本内容，不要添加任何解释或说明"""
-
-        if enable_vision and image_data:
-            user_message = {
-                'role': 'user',
-                'content': [
-                    {
-                        'type': 'text',
-                        'text': '请提取这张图片中的所有文字内容：'
-                    },
-                    {
-                        'type': 'image_url',
-                        'image_url': {
-                            'url': image_data
-                        }
-                    }
-                ]
-            }
-        else:
+            
             user_message = {
                 'role': 'user',
                 'content': content
             }
+            
+            if enable_vision and image_data:
+                user_message = {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': '请提取这张图片中的所有文字内容：'
+                        },
+                        {
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': image_data
+                            }
+                        }
+                    ]
+                }
         
-        return [
-            {'role': 'system', 'content': system_prompt},
-            user_message
-        ]
+        messages = [{'role': 'system', 'content': system_prompt}]
+        
+        if conversation_history:
+            for hist_msg in conversation_history:
+                if hist_msg.get('role') in ('user', 'assistant'):
+                    messages.append({
+                        'role': hist_msg['role'],
+                        'content': hist_msg.get('content', '')
+                    })
+        
+        messages.append(user_message)
+        
+        return messages
 
 
 ai_service = AIModelService()

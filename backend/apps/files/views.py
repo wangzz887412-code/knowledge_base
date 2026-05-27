@@ -2,8 +2,8 @@ from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import FileResponse
-from .models import Category, File, FileVersion, Bookmark
-from .serializers import CategorySerializer, FileSerializer, FileUploadSerializer, FileVersionSerializer, BookmarkSerializer, BookmarkCreateSerializer
+from .models import Category, File, Bookmark
+from .serializers import CategorySerializer, FileSerializer, FileUploadSerializer, BookmarkSerializer, BookmarkCreateSerializer
 import logging
 import traceback
 import os
@@ -141,7 +141,12 @@ class FileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return File.objects.filter(user=self.request.user)
+        queryset = File.objects.filter(user=self.request.user)
+        # 支持通过source参数过滤文件
+        source = self.request.query_params.get('source')
+        if source:
+            queryset = queryset.filter(source=source)
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -189,7 +194,15 @@ class FileViewSet(viewsets.ModelViewSet):
                     logger.info(f"[FILE_PROCESSING] 文件路径: {file_path}")
                     
                     # 根据文件类型选择不同的解析方式
-                    if file_path.endswith('.txt') or file_path.endswith('.md'):
+                    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg']
+                    is_image = any(file_path.lower().endswith(ext) for ext in image_extensions)
+                    
+                    if is_image:
+                        logger.info(f"[FILE_PROCESSING] ✓ 识别为图片文件，调用视觉模型分析...")
+                        extracted_text = self._analyze_image_with_vision(file_obj)
+                        logger.info(f"[FILE_PROCESSING] ✓ 图片视觉分析完成，长度: {len(extracted_text)} 字符")
+                    
+                    elif file_path.endswith('.txt') or file_path.endswith('.md'):
                         with open(file_path, 'r', encoding='utf-8') as f:
                             extracted_text = f.read()
                         logger.info(f"[FILE_PROCESSING] ✓ TXT/MD文本提取成功，长度: {len(extracted_text)} 字符")
@@ -302,6 +315,60 @@ class FileViewSet(viewsets.ModelViewSet):
             file_obj.save()
             raise
     
+    def _analyze_image_with_vision(self, file_obj):
+        """使用视觉模型分析图片内容"""
+        import base64
+        
+        try:
+            from apps.ai.services import ai_service
+            
+            image_path = file_obj.file.path
+            with open(image_path, 'rb') as f:
+                image_bytes = f.read()
+            
+            mime_type = 'image/png' if image_path.lower().endswith('.png') else 'image/jpeg'
+            image_base64 = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+            
+            model_id = file_obj.user.get_document_model_id()
+            model_config = ai_service.get_model_config(model_id)
+            
+            if not model_config or not model_config.supports_vision:
+                for m in ai_service.get_available_models():
+                    if m.get('supports_vision'):
+                        model_id = m['model_id']
+                        model_config = ai_service.get_model_config(model_id)
+                        logger.info(f"[IMAGE_VISION] 切换到视觉模型: {model_id}")
+                        break
+            
+            if not model_config or not model_config.supports_vision:
+                return f"图片文件：{file_obj.filename}（未配置视觉模型）"
+            
+            api_key = ''
+            if model_config.requires_api_key:
+                api_key = file_obj.user.get_provider_api_key(model_config.provider)
+                if not api_key:
+                    return f"图片文件：{file_obj.filename}（未配置{model_config.provider}的API密钥）"
+            
+            logger.info(f"[IMAGE_VISION] 使用模型 {model_id} 分析图片")
+            result = ai_service.extract_text_with_ai(
+                content="请详细描述这张图片的内容，包括：图像中的主体对象、场景、文字信息（如有）、颜色、构图、以及传达的信息或情感。",
+                image_data=image_base64,
+                model_id=model_id,
+                api_key=api_key,
+                mode='enhanced',
+                enable_vision=True,
+                task_type='chat'
+            )
+            
+            if result.get('success') and result.get('text'):
+                return result['text'].strip()
+            else:
+                return f"图片文件：{file_obj.filename}（分析失败：{result.get('error', '未知错误')}）"
+        
+        except Exception as e:
+            logger.error(f"[IMAGE_VISION] ✗ 图片分析异常: {e}", exc_info=True)
+            return f"图片文件：{file_obj.filename}（分析异常）"
+    
     def _auto_generate_tags_and_category(self, file_obj):
         """使用AI为文件生成标签和分类"""
         logger.info(f"[TAGS_AUTO] 开始自动生成标签...")
@@ -327,7 +394,7 @@ class FileViewSet(viewsets.ModelViewSet):
             Category = apps.get_model('files', 'Category')
             
             try:
-                # 创建或获取标签对应的分类
+                file_obj.keywords = ai_tags
                 for tag_name in ai_tags:
                     category, _ = Category.objects.get_or_create(
                         user=file_obj.user,
@@ -404,17 +471,25 @@ class FileViewSet(viewsets.ModelViewSet):
             from apps.ai.services import ai_service
             
             model_id = file_obj.user.get_document_model_id()
-            api_key = file_obj.user.get_api_key()
             
             model_config = ai_service.get_model_config(model_id)
+            
+            # 获取对应提供商的API Key
+            api_key = ''
+            if model_config and model_config.requires_api_key:
+                api_key = file_obj.user.get_provider_api_key(model_config.provider)
+            
             if model_config and model_config.requires_api_key and not api_key:
-                logger.warning(f"[MINDMAP] ⚠ 用户 {file_obj.user.username} 未配置API密钥，使用默认思维导图")
+                logger.warning(f"[MINDMAP] ⚠ 用户 {file_obj.user.username} 未配置{model_config.provider}的API密钥，使用默认思维导图")
                 return self._generate_default_mindmap(root_label, text)
             
             if not api_key:
                 api_key = ''
             
-            mindmap_prompt = f"""{text[:3000]}"""
+            mindmap_text_input = text[:12000] if len(text) > 12000 else text
+            mindmap_prompt = f"""请为以下知识内容生成一份完整的知识思维导图：
+
+{mindmap_text_input}"""
             
             logger.info(f"[MINDMAP] 调用AI服务生成思维导图")
             result = ai_service.extract_text_with_ai(
@@ -458,8 +533,12 @@ class FileViewSet(viewsets.ModelViewSet):
         return self._generate_default_mindmap(root_label, text)
     
     def _generate_default_mindmap(self, root_label, text):
-        """生成默认的思维导图作为后备"""
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        """生成默认的思维导图作为后备，提取关键知识点和概念"""
+        import re
+        
+        keywords = self._extract_keywords(text)
+        concepts = self._extract_concepts(text)
+        main_points = self._extract_main_points(text)
         
         mindmap = {
             'id': 'root',
@@ -467,51 +546,83 @@ class FileViewSet(viewsets.ModelViewSet):
             'children': []
         }
         
-        if lines:
-            main_branches = [
-                {
-                    'id': 'content',
-                    'label': '核心内容',
-                    'children': []
-                },
-                {
-                    'id': 'keywords',
-                    'label': '关键知识点',
-                    'children': []
-                },
-                {
-                    'id': 'related',
-                    'label': '关联概念',
-                    'children': []
-                }
-            ]
-            
-            for i, line in enumerate(lines[:10]):
-                if len(line) > 5:
-                    node_label = line[:30] if len(line) > 30 else line
-                    if i < 4:
-                        main_branches[0]['children'].append({
-                            'id': f'content_{i}',
-                            'label': node_label
-                        })
-                    elif i < 7:
-                        main_branches[1]['children'].append({
-                            'id': f'keyword_{i-4}',
-                            'label': node_label
-                        })
-                    else:
-                        main_branches[2]['children'].append({
-                            'id': f'related_{i-7}',
-                            'label': node_label
-                        })
-            
+        main_branches = []
+        
+        if main_points:
+            main_branches.append({
+                'id': 'core',
+                'label': '核心要点',
+                'children': [{'id': f'core_{i}', 'label': p[:30]} for i, p in enumerate(main_points[:4])]
+            })
+        
+        if keywords:
+            main_branches.append({
+                'id': 'keywords',
+                'label': '关键知识点',
+                'children': [{'id': f'kw_{i}', 'label': k[:25]} for i, k in enumerate(keywords[:5])]
+            })
+        
+        if concepts:
+            main_branches.append({
+                'id': 'concepts',
+                'label': '核心概念',
+                'children': [{'id': f'concept_{i}', 'label': c[:25]} for i, c in enumerate(concepts[:4])]
+            })
+        
+        if main_branches:
             mindmap['children'] = main_branches
         else:
-            mindmap['children'] = [
-                {'id': 'empty', 'label': '暂无内容'}
-            ]
+            mindmap['children'] = [{'id': 'empty', 'label': '暂无内容'}]
         
         return mindmap
+    
+    def _extract_keywords(self, text):
+        """从文本中提取关键词"""
+        import re
+        words = re.findall(r'[\u4e00-\u9fa5]{2,}|[a-zA-Z][a-zA-Z0-9_]*', text)
+        
+        stopwords = {'的', '是', '在', '有', '和', '了', '我', '你', '他', '她', '它', '这', '那', '能', '会', '可以', '应该', '因为', '所以', '但是', '如果', '虽然', '已经', '正在', '将', '被', '给', '与', '及', '等', '对', '对于', '关于', '通过', '按照', '根据', '基于', '认为', '指出', '表示', '说明', '提到', '包括', '包含', '涉及', '涉及到', '以及', '并且', '而且', '同时', '另外', '此外', '例如', '比如', '如', '即', '也就是', '也就是说', '所谓', '其实', '实际上', '事实上', '总之', '综上所述', '由此可见', '因此', '因而', '从而', '进而'}
+        
+        word_counts = {}
+        for word in words:
+            if len(word) >= 2 and word not in stopwords:
+                word_counts[word] = word_counts.get(word, 0) + 1
+        
+        sorted_words = sorted(word_counts.items(), key=lambda x: (-x[1], x[0]))
+        return [word for word, count in sorted_words[:10]]
+    
+    def _extract_concepts(self, text):
+        """从文本中提取核心概念（通常是名词短语）"""
+        import re
+        
+        patterns = [
+            r'([\u4e00-\u9fa5]{2,}(?:[\u4e00-\u9fa5]|的)*[\u4e00-\u9fa5]{2,})',
+            r'(基于[\u4e00-\u9fa5]{2,})',
+            r'([\u4e00-\u9fa5]{2,}技术|[\u4e00-\u9fa5]{2,}方法|[\u4e00-\u9fa5]{2,}理论|[\u4e00-\u9fa5]{2,}模型|[\u4e00-\u9fa5]{2,}系统|[\u4e00-\u9fa5]{2,}算法|[\u4e00-\u9fa5]{2,}框架)',
+            r'([A-Za-z][a-zA-Z0-9_]*(?:[\u4e00-\u9fa5]+)?[\w]*)'
+        ]
+        
+        concepts = set()
+        for pattern in patterns:
+            matches = re.findall(pattern, text)
+            for match in matches:
+                if len(match) >= 2:
+                    concepts.add(match.strip())
+        
+        return list(concepts)[:8]
+    
+    def _extract_main_points(self, text):
+        """提取主要要点（通常是句子开头的关键内容）"""
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        points = []
+        
+        for line in lines[:15]:
+            if len(line) >= 10:
+                line = re.sub(r'^[\d一二三四五六七八九十]+[\.\uff0e、\-:：]\s*', '', line)
+                line = re.sub(r'^[•●○◆◇★☆△▲]+\s*', '', line)
+                points.append(line[:40])
+        
+        return list(dict.fromkeys(points))[:6]
     
     def _count_nodes(self, node):
         """递归计算节点数量"""
@@ -546,10 +657,8 @@ class FileViewSet(viewsets.ModelViewSet):
         
         # 获取用户的AI配置
         model_id = file_obj.user.get_document_model_id()
-        api_key = file_obj.user.get_api_key()
         
         logger.info(f"[AI_SUMMARY] 使用模型: {model_id}")
-        logger.info(f"[AI_SUMMARY] API密钥: {'已设置' if api_key else '未设置'}")
         
         # 获取模型配置，检查是否需要API密钥
         try:
@@ -561,20 +670,28 @@ class FileViewSet(viewsets.ModelViewSet):
                 logger.info(f"[AI_SUMMARY] 提供商: {model_config.provider}")
                 logger.info(f"[AI_SUMMARY] 需要API密钥: {model_config.requires_api_key}")
             
+            # 获取对应提供商的API Key
+            api_key = ''
+            if model_config and model_config.requires_api_key:
+                api_key = file_obj.user.get_provider_api_key(model_config.provider)
+                logger.info(f"[AI_SUMMARY] {model_config.provider} API密钥: {'已设置' if api_key else '未设置'}")
+            
             # 如果模型需要API密钥但没有提供
             if model_config and model_config.requires_api_key and not api_key:
                 logger.warning(f"[AI_SUMMARY] ⚠ 模型需要API密钥但未提供")
-                logger.warning(f'[AI_SUMMARY] 用户 {file_obj.user.username} 未配置API密钥，无法生成AI摘要')
-                return "请在AI设置中配置API密钥以生成摘要"
+                logger.warning(f'[AI_SUMMARY] 用户 {file_obj.user.username} 未配置{model_config.provider}的API密钥，无法生成AI摘要')
+                return f"请在AI设置中配置{model_config.provider}的API密钥以生成摘要"
             
             # Ollama模型不需要API密钥，使用空字符串即可
             if not api_key:
                 api_key = ''
-                logger.info(f"[AI_SUMMARY] Ollama模型，无需API密钥")
+                if model_config and model_config.provider == 'Ollama':
+                    logger.info(f"[AI_SUMMARY] Ollama模型，无需API密钥")
                 
         except Exception as e:
             logger.error(f"[AI_SUMMARY] ✗ 获取模型配置失败: {e}", exc_info=True)
             # 如果无法获取模型配置，默认需要API密钥
+            api_key = file_obj.user.get_api_key()
             if not api_key:
                 logger.warning(f'[AI_SUMMARY] 用户 {file_obj.user.username} 未配置API密钥，无法生成AI摘要')
                 return "请在AI设置中配置API密钥以生成摘要"
@@ -584,18 +701,12 @@ class FileViewSet(viewsets.ModelViewSet):
             from apps.ai.services import ai_service
             
             logger.info(f"[AI_SUMMARY] 正在调用AI服务生成摘要...")
-            logger.info(f"[AI_SUMMARY] 发送文本长度: {len(text[:3000])} 字符")
+            summary_text = text[:12000] if len(text) > 12000 else text
+            logger.info(f"[AI_SUMMARY] 发送文本长度: {len(summary_text)} 字符")
             
-            summary_prompt = f"""请对以下文档内容进行总结，生成一个简明扼要的摘要：
+            summary_prompt = f"""总结文件内容：
 
-文档内容：
-{text[:3000]}
-
-要求：
-1. 摘要应包含文档的主要观点和关键信息
-2. 保持语言简洁明了
-3. 长度控制在3-5句话以内
-4. 使用中文输出"""
+{summary_text}"""
             
             logger.info(f"[AI_SUMMARY] 调用AI服务，task_type=summarize")
             result = ai_service.extract_text_with_ai(
@@ -612,12 +723,10 @@ class FileViewSet(viewsets.ModelViewSet):
             
             if result.get('success') and result.get('text'):
                 summary = result['text']
-                # 清理可能的格式问题
                 summary = summary.strip()
-                if summary.startswith('总结：') or summary.startswith('摘要：'):
-                    summary = summary[3:].strip()
+                
                 logger.info(f"[AI_SUMMARY] ✓ 摘要生成成功，长度: {len(summary)} 字符")
-                logger.info(f"[AI_SUMMARY] 摘要内容: {summary[:200]}...")
+                logger.info(f"[AI_SUMMARY] 摘要内容(前200字): {summary[:200]}")
                 return summary
             else:
                 logger.error(f'[AI_SUMMARY] ✗ AI摘要生成失败: {result.get("error")}')
@@ -635,7 +744,13 @@ class FileViewSet(viewsets.ModelViewSet):
         
         # 获取用户的AI配置
         model_id = file_obj.user.get_document_model_id()
-        api_key = file_obj.user.get_api_key()
+        
+        # 获取API密钥（支持新格式和旧格式）
+        from apps.ai.services import ai_service
+        model_config = ai_service.get_model_config(model_id)
+        api_key = ''
+        if model_config and model_config.requires_api_key:
+            api_key = file_obj.user.get_provider_api_key(model_config.provider) or file_obj.user.get_api_key()
         
         # 检查是否有API密钥
         if not api_key:
@@ -647,17 +762,27 @@ class FileViewSet(viewsets.ModelViewSet):
             from apps.ai.services import ai_service
             
             logger.info(f"[AI_TAGS] 调用AI服务生成标签...")
-            tag_prompt = f"""请分析以下文档内容，提取3-5个最相关的标签/关键词：
+            tag_prompt = f"""请为以下文档精准提取5-8个最具代表性的关键词标签：
 
-文档内容：
-{text[:3000]}
+📄 文档内容预览：
+{text[:6000]}
 
-要求：
-1. 标签应该简洁明了，每个标签2-4个字
-2. 标签应该反映文档的主要主题或领域
-3. 只输出标签，用顿号分隔，不要添加任何解释
-4. 使用中文输出
-5. 不要使用"其他"、"通用"等泛化标签"""
+请从以下维度提取标签：
+- 🏷️ 主题领域：如"人工智能"、"机器学习"、"医疗健康"等
+- 💻 技术栈：如"深度学习"、"自然语言处理"、"计算机视觉"等
+- 🎯 应用场景：如"智能诊断"、"数据分析"、"自动化"等
+- 📚 方法论：如"监督学习"、"神经网络"、"强化学习"等
+- 🔑 核心术语：文档中出现的重要专业术语
+
+输出格式：
+请严格按以下格式输出标签，用顿号（、）分隔：
+标签1、标签2、标签3、标签4、标签5
+
+标签规范：
+✓ 标签要精准、具体，避免泛化
+✓ 每个标签2-6个字
+✓ 只输出标签，不要任何解释或说明文字
+✓ 选择最具代表性和检索价值的标签"""
             
             result = ai_service.extract_text_with_ai(
                 content=tag_prompt,
@@ -713,7 +838,13 @@ class FileViewSet(viewsets.ModelViewSet):
         
         # 获取用户的AI配置
         model_id = file_obj.user.get_document_model_id()
-        api_key = file_obj.user.get_api_key()
+        
+        # 获取API密钥（支持新格式和旧格式）
+        from apps.ai.services import ai_service
+        model_config = ai_service.get_model_config(model_id)
+        api_key = ''
+        if model_config and model_config.requires_api_key:
+            api_key = file_obj.user.get_provider_api_key(model_config.provider) or file_obj.user.get_api_key()
         
         # 如果没有配置API密钥，返回默认分析
         if not api_key:
@@ -721,13 +852,6 @@ class FileViewSet(viewsets.ModelViewSet):
             return "文档分析需要配置AI模型API密钥，请在设置页面配置。"
         
         try:
-            from apps.ai.services import ai_service
-            
-            model_config = ai_service.get_model_config(model_id)
-            if model_config and model_config.requires_api_key and not api_key:
-                logger.warning(f"[AI_ANALYSIS] ⚠ 用户 {file_obj.user.username} 未配置API密钥")
-                return "文档分析需要配置AI模型API密钥，请在设置页面配置。"
-            
             result = ai_service.extract_text_with_ai(
                 content=text,
                 model_id=model_id,
@@ -776,14 +900,6 @@ class FileViewSet(viewsets.ModelViewSet):
         file_obj = self.get_object()
         notes_data = request.data.get('notes', '')
         
-        FileVersion.objects.create(
-            file=file_obj,
-            version_number=file_obj.versions.count() + 1,
-            extracted_text=file_obj.extracted_text,
-            ai_summary=file_obj.ai_summary,
-            notes=file_obj.notes
-        )
-        
         file_obj.notes = notes_data
         file_obj.save(update_fields=['notes', 'updated_at'])
         return Response({
@@ -791,36 +907,6 @@ class FileViewSet(viewsets.ModelViewSet):
             'notes': file_obj.notes,
             'updated_at': file_obj.updated_at,
         })
-
-    @action(detail=True, methods=['get'])
-    def versions(self, request, pk=None):
-        file_obj = self.get_object()
-        versions = FileVersion.objects.filter(file=file_obj).order_by('-created_at')
-        serializer = FileVersionSerializer(versions, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def restore_version(self, request, pk=None):
-        file_obj = self.get_object()
-        version_id = request.data.get('version_id')
-        
-        try:
-            version = FileVersion.objects.get(id=version_id, file=file_obj)
-            file_obj.extracted_text = version.extracted_text
-            file_obj.ai_summary = version.ai_summary
-            file_obj.notes = version.notes
-            file_obj.save()
-            
-            return Response({
-                'success': True,
-                'message': f'已恢复到版本 {version.version_number}',
-                'version': FileVersionSerializer(version).data
-            })
-        except FileVersion.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': '版本不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):

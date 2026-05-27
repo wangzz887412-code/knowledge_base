@@ -79,6 +79,9 @@ test_ollama_*.py
 test_upload.py
 test_document.txt
 test_pdf_extraction.py
+backend/test_fix.py
+backend/test_markdown_summary.py
+backend/test_markdown_compatibility.py
 
 # 临时文件
 *.rtf

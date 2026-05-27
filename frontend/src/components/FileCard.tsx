@@ -11,6 +11,7 @@ interface FileCardProps {
   category?: string;
   aiSummary?: string;
   tags?: Array<{ id: number; name: string; color: string }>;
+  keywords?: string[];
   onClick: () => void;
   onDelete?: () => void;
 }
@@ -21,6 +22,7 @@ export const FileCard: React.FC<FileCardProps> = ({
   category = '未分类',
   aiSummary,
   tags = [],
+  keywords = [],
   onClick,
   onDelete
 }) => {
@@ -126,6 +128,27 @@ export const FileCard: React.FC<FileCardProps> = ({
                   whileHover={{ scale: 1.05 }}
                 >
                   {tag.name}
+                </motion.span>
+              ))}
+            </motion.div>
+          )}
+
+          {keywords.length > 0 && (
+            <motion.div
+              className="flex flex-wrap gap-1 mb-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.15 }}
+            >
+              {keywords.slice(0, 5).map((kw, index) => (
+                <motion.span
+                  key={index}
+                  className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.15 + index * 0.05 }}
+                >
+                  {kw}
                 </motion.span>
               ))}
             </motion.div>

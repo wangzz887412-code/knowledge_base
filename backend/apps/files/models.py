@@ -19,11 +19,17 @@ class Category(models.Model):
 
 
 class File(models.Model):
+    SOURCE_CHOICES = [
+        ('knowledge_base', '知识库'),
+        ('ai_chat', 'AI助手'),
+    ]
+    
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     file = models.FileField(upload_to=get_file_upload_path, null=True, blank=True)
     filename = models.CharField(max_length=255)
     file_type = models.CharField(max_length=50)
     file_size = models.IntegerField(default=0)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='knowledge_base')  # 文件来源
     categories = models.ManyToManyField(Category, blank=True)
     status = models.CharField(max_length=20, default='uploading')
     process_status = models.CharField(max_length=20, default='pending')  # pending, processing, completed, failed
@@ -34,6 +40,7 @@ class File(models.Model):
     ai_analysis = models.TextField(blank=True, null=True)
     mindmap_data = models.JSONField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    keywords = models.JSONField(blank=True, null=True, default=list)
     is_public = models.BooleanField(default=False)
     share_token = models.CharField(max_length=64, blank=True, null=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)

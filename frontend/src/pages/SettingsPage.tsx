@@ -11,6 +11,7 @@ interface AIModel {
   supports_vision: boolean;
   requires_api_key: boolean;
   supports_thinking?: boolean;
+  context_window?: number;
 }
 
 interface AIConfig {
@@ -19,6 +20,7 @@ interface AIConfig {
   document_model_id: string;
   document_model_name: string;
   api_key: string;
+  api_keys?: Record<string, string>;
   enable_vision: boolean;
   enable_thinking: boolean;
 }
@@ -30,6 +32,7 @@ const SettingsPage: React.FC = () => {
     document_model_id: 'glm-4-flash-250414',
     document_model_name: 'GLM-4-Flash-250414',
     api_key: '',
+    api_keys: {},
     enable_vision: false,
     enable_thinking: false
   });
@@ -38,7 +41,7 @@ const SettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
@@ -53,7 +56,13 @@ const SettingsPage: React.FC = () => {
         headers: { Authorization: `Token ${token}` }
       });
       
-      setConfig(response.data.config);
+      const serverConfig = response.data.config;
+      // 确保api_keys存在
+      if (!serverConfig.api_keys) {
+        serverConfig.api_keys = {};
+      }
+      
+      setConfig(serverConfig);
       setAvailableModels(response.data.available_models);
     } catch (error) {
       console.error('获取配置失败:', error);
@@ -69,7 +78,13 @@ const SettingsPage: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${API_BASE}/ai/config/`, config, {
+      await axios.put(`${API_BASE}/ai/config/`, {
+        chat_model_id: config.chat_model_id,
+        document_model_id: config.document_model_id,
+        api_keys: config.api_keys,
+        enable_vision: config.enable_vision,
+        enable_thinking: config.enable_thinking
+      }, {
         headers: { Authorization: `Token ${token}` }
       });
       
@@ -90,11 +105,15 @@ const SettingsPage: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
+      const selectedModel = availableModels.find(m => m.model_id === config.chat_model_id);
+      const provider = selectedModel?.provider || 'Zhipu';
+      const apiKey = config.api_keys?.[provider] || '';
+      
       const response = await axios.post(
         `${API_BASE}/ai/test-connection/`,
         {
           model_id: config.chat_model_id,
-          api_key: config.api_key
+          api_key: apiKey
         },
         { headers: { Authorization: `Token ${token}` } }
       );
@@ -115,6 +134,24 @@ const SettingsPage: React.FC = () => {
   const selectedChatModel = availableModels.find(m => m.model_id === config.chat_model_id);
   const selectedDocModel = availableModels.find(m => m.model_id === config.document_model_id);
   const selectedModel = selectedChatModel;
+  
+  // 获取所有提供商
+  const getProviders = () => {
+    const providers = new Set<string>();
+    availableModels.forEach(model => providers.add(model.provider));
+    return Array.from(providers);
+  };
+  
+  // 更新提供商的API Key
+  const updateProviderApiKey = (provider: string, value: string) => {
+    setConfig(prev => ({
+      ...prev,
+      api_keys: {
+        ...prev.api_keys,
+        [provider]: value
+      }
+    }));
+  };
 
   if (loading) {
     return (
@@ -209,6 +246,12 @@ const SettingsPage: React.FC = () => {
                           {selectedChatModel.supports_thinking ? '✓ 支持' : '✗ 不支持'}
                         </span>
                       </div>
+                      {selectedChatModel.context_window && (
+                        <div>
+                          <span className="font-semibold text-ink-light">上下文窗口：</span>
+                          <span className="text-ink font-serif">{(selectedChatModel.context_window / 1000).toFixed(0)}K tokens</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -268,6 +311,12 @@ const SettingsPage: React.FC = () => {
                           {selectedDocModel.supports_thinking ? '✓ 支持' : '✗ 不支持'}
                         </span>
                       </div>
+                      {selectedDocModel.context_window && (
+                        <div>
+                          <span className="font-semibold text-ink-light">上下文窗口：</span>
+                          <span className="text-ink font-serif">{(selectedDocModel.context_window / 1000).toFixed(0)}K tokens</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -281,38 +330,76 @@ const SettingsPage: React.FC = () => {
               </h3>
               
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-ink-light mb-2 font-serif">
-                    API密钥
-                    {selectedChatModel?.requires_api_key && (
-                      <span className="ml-2 text-xs bg-gold/20 text-gold px-2 py-1 rounded-full">
-                        必需
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={config.api_key}
-                      onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
-                      placeholder={selectedChatModel?.requires_api_key ? '请输入API密钥...' : '该模型不需要API密钥'}
-                      disabled={!selectedChatModel?.requires_api_key}
-                      className="w-full px-4 py-3 pr-20 bg-paper border border-paper-dark rounded-xl 
-                               text-ink font-serif focus:outline-none focus:border-leather 
-                               focus:ring-2 focus:ring-leather/20 transition-all
-                               disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <button
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-light hover:text-ink 
-                               transition-colors text-sm font-serif"
-                    >
-                      {showApiKey ? '隐藏' : '显示'}
-                    </button>
-                  </div>
-                </div>
+                {getProviders().map(provider => {
+                  const providerModels = availableModels.filter(m => m.provider === provider);
+                  const requiresApiKey = providerModels.some(m => m.requires_api_key);
+                  const hasVisionModels = providerModels.some(m => m.supports_vision);
+                  const hasThinkingModels = providerModels.some(m => m.supports_thinking);
+                  
+                  return (
+                    <div key={provider} className="p-4 bg-paper rounded-xl border border-paper-dark">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold text-ink font-serif">{provider}</h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            {requiresApiKey && (
+                              <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded-full">
+                                需要API密钥
+                              </span>
+                            )}
+                            {hasVisionModels && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                🧿 支持视觉
+                              </span>
+                            )}
+                            {hasThinkingModels && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                💭 支持思考
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-ink-light font-serif">
+                          {providerModels.length} 个模型
+                        </div>
+                      </div>
+                      
+                      {requiresApiKey && (
+                        <div>
+                          <div className="relative">
+                            <input
+                              type={showApiKey[provider] ? 'text' : 'password'}
+                              value={config.api_keys?.[provider] || ''}
+                              onChange={(e) => updateProviderApiKey(provider, e.target.value)}
+                              placeholder={`请输入${provider}的API密钥...`}
+                              className="w-full px-4 py-3 pr-20 bg-white border border-paper-dark rounded-xl 
+                                       text-ink font-serif focus:outline-none focus:border-leather 
+                                       focus:ring-2 focus:ring-leather/20 transition-all"
+                            />
+                            <button
+                              onClick={() => setShowApiKey(prev => ({
+                                ...prev,
+                                [provider]: !prev[provider]
+                              }))}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-light hover:text-ink 
+                                       transition-colors text-sm font-serif"
+                            >
+                              {showApiKey[provider] ? '隐藏' : '显示'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {!requiresApiKey && (
+                        <div className="text-sm text-ink-light font-serif py-2">
+                          该提供商的模型不需要API密钥
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 pt-2">
                   <button
                     onClick={handleTestConnection}
                     disabled={testing}
@@ -326,7 +413,7 @@ const SettingsPage: React.FC = () => {
                         : 'bg-leather text-white hover:bg-leather-light shadow-md hover:shadow-lg'
                     }`}
                   >
-                    {testing ? '⏳ 测试中...' : '🔗 测试连接'}
+                    {testing ? '⏳ 测试中...' : '🔗 测试当前模型'}
                   </button>
                   
                   <div className={`flex items-center gap-2 font-serif text-sm ${
@@ -414,22 +501,22 @@ const SettingsPage: React.FC = () => {
 
                 {/* 当前状态提示 */}
                 <div className={`p-4 rounded-xl border-l-4 ${
-                  !selectedModel?.requires_api_key || config.api_key
+                  !selectedModel?.requires_api_key || (config.api_keys?.[selectedModel?.provider || ''] || config.api_key)
                     ? 'bg-green-50 border-green-500'
                     : 'bg-amber-50 border-amber-500'
                 }`}>
                   <div className="flex items-start gap-3">
                     <span className="text-xl">
-                      {!selectedModel?.requires_api_key || config.api_key ? '🟢' : '🟡'}
+                      {!selectedModel?.requires_api_key || (config.api_keys?.[selectedModel?.provider || ''] || config.api_key) ? '🟢' : '🟡'}
                     </span>
                     <div>
                       <div className="font-semibold text-ink font-serif mb-1">
                         当前运行状态
                       </div>
                       <div className="text-sm text-ink-light font-serif">
-                        {selectedModel?.requires_api_key && !config.api_key ? (
+                        {selectedModel?.requires_api_key && !(config.api_keys?.[selectedModel?.provider || ''] || config.api_key) ? (
                           <>
-                            <span className="text-amber-600 font-semibold">请配置API密钥</span>
+                            <span className="text-amber-600 font-semibold">请配置{selectedModel?.provider}的API密钥</span>
                             {' '} - 使用 {selectedModel?.name} 进行智能处理
                           </>
                         ) : (

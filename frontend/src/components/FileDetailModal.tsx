@@ -3,6 +3,8 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { MindMapViewer } from './MindMapViewer';
+import { CanvasNotes } from './CanvasNotes';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 const API_BASE = 'http://localhost:8000/api';
 
@@ -12,27 +14,18 @@ interface FileDetail {
   file_type: string;
   file_size: number;
   categories: Array<{ id: number; name: string; color: string }>;
+  keywords: string[];
   status: string;
   process_status: string;
   process_progress: number;
   process_message: string;
   extracted_text: string;
   ai_summary: string;
-  ai_analysis: string;
   mindmap_data: Record<string, unknown> | null;
   notes: string;
   is_public: boolean;
   created_at: string;
   updated_at: string;
-}
-
-interface FileVersion {
-  id: number;
-  version_number: number;
-  extracted_text: string;
-  ai_summary: string;
-  notes: string;
-  created_at: string;
 }
 
 interface FileDetailModalProps {
@@ -42,7 +35,7 @@ interface FileDetailModalProps {
   onUpdate?: () => void;
 }
 
-type TabType = 'info' | 'mindmap' | 'notes' | 'versions';
+type TabType = 'info' | 'mindmap' | 'notes';
 
 interface MindMapData {
   id: string;
@@ -55,17 +48,12 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
   const [fileDetail, setFileDetail] = useState<FileDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('info');
-  const [notes, setNotes] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkNote, setBookmarkNote] = useState('');
-  const [versions, setVersions] = useState<FileVersion[]>([]);
-  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen && fileId) {
       fetchFileDetail(fileId);
-      fetchVersions(fileId);
       checkBookmark(fileId);
     }
   }, [isOpen, fileId]);
@@ -77,22 +65,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
         headers: token ? { Authorization: `Token ${token}` } : {}
       });
       setFileDetail(response.data);
-      setNotes(response.data.notes || '');
     } catch (error) {
       console.error('获取文件详情失败:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchVersions = async (id: number) => {
-    try {
-      const response = await axios.get(`${API_BASE}/files/files/${id}/versions/`, {
-        headers: token ? { Authorization: `Token ${token}` } : {}
-      });
-      setVersions(response.data);
-    } catch (error) {
-      console.error('获取版本历史失败:', error);
     }
   };
 
@@ -109,26 +85,21 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
     }
   };
 
-  const handleSaveNotes = async () => {
+  const handleSaveNotes = async (notesData: string) => {
     if (!fileId) return;
-    setSavingNotes(true);
     try {
-      await axios.patch(`${API_BASE}/files/files/${fileId}/notes/`, { notes }, {
+      await axios.patch(`${API_BASE}/files/files/${fileId}/notes/`, { notes: notesData }, {
         headers: {
           Authorization: `Token ${token}`,
           'Content-Type': 'application/json'
         }
       });
       if (fileDetail) {
-        setFileDetail({ ...fileDetail, notes });
+        setFileDetail({ ...fileDetail, notes: notesData });
       }
       onUpdate?.();
-      alert('笔记保存成功！');
     } catch (error) {
       console.error('保存笔记失败:', error);
-      alert('保存失败，请重试');
-    } finally {
-      setSavingNotes(false);
     }
   };
 
@@ -182,28 +153,6 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
       console.error('操作书签失败:', error);
       const errorMsg = error.response?.data?.error || error.message || '操作失败，请重试';
       alert(errorMsg);
-    }
-  };
-
-  const handleRestoreVersion = async (versionId: number) => {
-    if (!fileId) return;
-    setRestoringVersion(versionId);
-    
-    try {
-      await axios.post(`${API_BASE}/files/files/${fileId}/restore_version/`, { version_id: versionId }, {
-        headers: {
-          Authorization: `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      await fetchFileDetail(fileId);
-      await fetchVersions(fileId);
-      alert('版本恢复成功！');
-    } catch (error) {
-      console.error('恢复版本失败:', error);
-      alert('恢复失败，请重试');
-    } finally {
-      setRestoringVersion(null);
     }
   };
 
@@ -330,16 +279,6 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
           >
             ✏️ 笔记
           </button>
-          <button
-            onClick={() => setActiveTab('versions')}
-            className={`px-6 py-3 font-serif transition-all ${
-              activeTab === 'versions'
-                ? 'text-[#D4A574] border-b-2 border-[#D4A574] bg-[#F5EDE0]'
-                : 'text-[#8B7355] hover:text-[#3D2914]'
-            }`}
-          >
-            📜 版本历史 ({versions.length})
-          </button>
         </div>
 
         <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 230px)' }}>
@@ -350,34 +289,36 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
           ) : (
             <React.Fragment>
               {activeTab === 'info' && fileDetail && (
-                <div className="space-y-6 animate-fadeIn">
+                <div className="space-y-6 animate-fadeIn max-w-4xl">
                   {fileDetail.ai_summary && (
-                    <div className="bg-gradient-to-r from-[#10A37F]/5 to-[#10A37F]/10 rounded-xl p-6 border border-[#10A37F]/20">
-                      <div className="flex items-center gap-2 mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10A37F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <path d="M12 16v-4"></path>
-                          <path d="M12 8h.01"></path>
-                        </svg>
-                        <div className="text-sm font-semibold text-[#10A37F]">文档摘要</div>
+                    <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-9 h-9 bg-gradient-to-br from-[#10A37F] to-[#0E8F6E] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                            <path d="m9.5 17 5-5 5 5"></path>
+                          </svg>
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">AI 摘要</div>
+                          <p className="text-xs text-gray-500">由 AI 生成 · {fileDetail.ai_summary.length} 字符</p>
+                        </div>
                       </div>
-                      <p className="text-[#3D2914] leading-relaxed font-serif text-base">{fileDetail.ai_summary}</p>
+                      <MarkdownRenderer content={fileDetail.ai_summary} />
                     </div>
                   )}
 
-                  {fileDetail.ai_analysis && (
-                    <div className="bg-gradient-to-r from-[#D4A574]/5 to-[#D4A574]/10 rounded-xl p-6 border border-[#D4A574]/20">
-                      <div className="flex items-center gap-2 mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4A574" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                          <polyline points="14 2 14 8 20 8"></polyline>
-                          <line x1="16" y1="13" x2="8" y2="13"></line>
-                          <line x1="16" y1="17" x2="8" y2="17"></line>
-                          <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                        <div className="text-sm font-semibold text-[#D4A574]">文档分析</div>
-                      </div>
-                      <p className="text-[#3D2914] leading-relaxed font-serif text-base whitespace-pre-line">{fileDetail.ai_analysis}</p>
+                  {fileDetail.keywords && fileDetail.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {fileDetail.keywords.map((kw: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 bg-[#F5EDE0] text-[#3D2914] rounded-full text-sm font-serif border border-[#E5DDD0] hover:bg-[#E5DDD0] transition-colors"
+                        >
+                          {kw}
+                        </span>
+                      ))}
                     </div>
                   )}
 
@@ -436,71 +377,15 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
               )}
 
               {activeTab === 'notes' && (
-                <div className="animate-fadeIn space-y-4">
-                  <div className="bg-[#F5EDE0] rounded-xl p-2 border border-[#E5DDD0]">
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="在这里记录您的笔记...支持 Markdown 格式"
-                      className="w-full h-64 p-4 bg-transparent resize-none focus:outline-none text-[#3D2914] font-serif placeholder-[#8B7355]"
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={handleSaveNotes}
-                      disabled={savingNotes}
-                      className={`px-6 py-2 rounded-xl font-serif transition-all ${
-                        savingNotes
-                          ? 'bg-gray-300 cursor-not-allowed'
-                          : 'bg-leather text-white hover:bg-leather/90 shadow-md'
-                      }`}
-                    >
-                      {savingNotes ? '保存中...' : '💾 保存笔记'}
-                    </button>
-                  </div>
+                <div className="animate-fadeIn h-full">
+                  <CanvasNotes
+                    fileId={fileId}
+                    savedNotes={fileDetail?.notes || ''}
+                    onSave={handleSaveNotes}
+                  />
                 </div>
               )}
 
-              {activeTab === 'versions' && (
-                <div className="animate-fadeIn space-y-4">
-                  {versions.length > 0 ? (
-                    <div className="space-y-3">
-                      {versions.map((version) => (
-                        <div
-                          key={version.id}
-                          className="bg-[#F5EDE0] rounded-xl p-4 border border-[#E5DDD0] flex justify-between items-center"
-                        >
-                          <div className="flex-1">
-                            <div className="font-semibold text-[#3D2914] font-serif">
-                              版本 {version.version_number}
-                            </div>
-                            <div className="text-sm text-[#8B7355] font-serif">
-                              创建于 {formatDate(version.created_at)}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRestoreVersion(version.id)}
-                            disabled={restoringVersion === version.id}
-                            className={`px-4 py-2 rounded-lg font-serif transition-all ${
-                              restoringVersion === version.id
-                                ? 'bg-gray-300 cursor-not-allowed'
-                                : 'bg-leather text-white hover:bg-leather/90'
-                            }`}
-                          >
-                            {restoringVersion === version.id ? '恢复中...' : '🔄 恢复'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="text-4xl mb-4">📜</div>
-                      <p className="text-[#8B7355] font-serif">暂无版本历史</p>
-                      <p className="text-[#8B7355] font-serif text-sm">修改笔记后会自动保存版本</p>
-                    </div>
-                  )}
-                </div>
-              )}
             </React.Fragment>
           )}
         </div>
