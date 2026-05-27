@@ -18,6 +18,7 @@ interface FileDetail {
   process_message: string;
   extracted_text: string;
   ai_summary: string;
+  ai_analysis: string;
   mindmap_data: Record<string, unknown> | null;
   notes: string;
   is_public: boolean;
@@ -364,6 +365,22 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
                     </div>
                   )}
 
+                  {fileDetail.ai_analysis && (
+                    <div className="bg-gradient-to-r from-[#D4A574]/5 to-[#D4A574]/10 rounded-xl p-6 border border-[#D4A574]/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4A574" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <div className="text-sm font-semibold text-[#D4A574]">文档分析</div>
+                      </div>
+                      <p className="text-[#3D2914] leading-relaxed font-serif text-base whitespace-pre-line">{fileDetail.ai_analysis}</p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-[#F5EDE0] rounded-xl p-4 border border-[#E5DDD0]">
                       <div className="text-xs text-[#8B7355] mb-1">文件类型</div>
@@ -412,6 +429,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({ fileId, isOpen
                 <div className="animate-fadeIn" style={{ height: '500px' }}>
                   <MindMapViewer
                     data={(fileDetail?.mindmap_data as unknown as MindMapData) || null}
+                    fileId={fileId?.toString()}
                     onNodeClick={() => {}}
                   />
                 </div>

@@ -61,3 +61,51 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# 测试文件
+test_*.py
+test_api.py
+test_zhipu_simple.py
+test_glm_models.py
+test_glm_streaming.py
+test_login.py
+test_all*.py
+backend/create_test_user.py
+backend/test_zhipu_api.py
+simple_test.py
+debug_upload.py
+fix_ollama_config.py
+test_ollama_*.py
+test_upload.py
+test_document.txt
+test_pdf_extraction.py
+
+# 临时文件
+*.rtf
+*.txt
+*.bak
+*.tmp
+*.txt
+
+# 测试结果
+frontend/test-results/
+frontend/tests/
+
+# Redis数据
+Redis/
+dump.rdb
+memurai*.exe
+memurai*.dll
+libssl*.dll
+libcrypto*.dll
+
+# 快捷方式和启动脚本（可选，根据需要取消注释）
+# start-website.bat
+# start-website.ps1
+# start.ps1
+# stop.ps1
+# create-shortcut.ps1
+
+# 日志
+memurai-log.txt
+*.log

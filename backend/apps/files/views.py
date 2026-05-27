@@ -267,10 +267,16 @@ class FileViewSet(viewsets.ModelViewSet):
                     'children': []
                 }
             
-            # 生成思维导图
-            logger.info(f"[FILE_PROCESSING] 开始生成思维导图...")
-            file_obj.mindmap_data = self._generate_mindmap(file_obj)
-            logger.info(f"[FILE_PROCESSING] 思维导图生成完成")
+            # 生成文档分析
+            logger.info(f"[FILE_PROCESSING] 开始生成文档分析...")
+            file_obj.ai_analysis = self._generate_ai_analysis(file_obj)
+            logger.info(f"[FILE_PROCESSING] 文档分析生成完成，长度: {len(file_obj.ai_analysis)} 字符")
+            
+            # 更新进度：文档分析完成
+            file_obj.process_progress = 75
+            file_obj.process_message = '文档分析生成完成'
+            file_obj.save()
+            logger.info(f"[FILE_PROCESSING] 进度更新: 75% - 文档分析完成")
             
             # 更新进度：完成
             file_obj.status = 'ready'
@@ -388,40 +394,148 @@ class FileViewSet(viewsets.ModelViewSet):
             logger.warning(f'[KEYWORDS] ✗ 关键词匹配生成分类失败: {e}')
 
     def _generate_mindmap(self, file_obj):
-        """根据文件内容生成思维导图"""
-        text = file_obj.extracted_text
+        """使用AI根据文档摘要生成思维导图，包含关键词和关系"""
+        text = file_obj.ai_summary if file_obj.ai_summary else file_obj.extracted_text
         filename = file_obj.filename
         
-        # 提取关键信息
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        keywords = []
+        root_label = filename.rsplit('.', 1)[0] if '.' in filename else filename
         
-        # 简单提取关键词（可以根据需要增强）
-        for line in lines[:10]:
-            if len(line) > 0:
-                keywords.append(line[:20] if len(line) > 20 else line)
+        try:
+            from apps.ai.services import ai_service
+            
+            model_id = file_obj.user.get_document_model_id()
+            api_key = file_obj.user.get_api_key()
+            
+            model_config = ai_service.get_model_config(model_id)
+            if model_config and model_config.requires_api_key and not api_key:
+                logger.warning(f"[MINDMAP] ⚠ 用户 {file_obj.user.username} 未配置API密钥，使用默认思维导图")
+                return self._generate_default_mindmap(root_label, text)
+            
+            if not api_key:
+                api_key = ''
+            
+            mindmap_prompt = f"""{text[:3000]}"""
+            
+            logger.info(f"[MINDMAP] 调用AI服务生成思维导图")
+            result = ai_service.extract_text_with_ai(
+                content=mindmap_prompt,
+                model_id=model_id,
+                api_key=api_key,
+                mode='enhanced',
+                task_type='mindmap'
+            )
+            
+            if result.get('success') and result.get('text'):
+                mindmap_text = result['text'].strip()
+                
+                import re
+                mindmap_text = re.sub(r'^```json\s*|\s*```$', '', mindmap_text)
+                
+                try:
+                    import json
+                    mindmap = json.loads(mindmap_text)
+                    
+                    if 'name' in mindmap:
+                        mindmap = self._convert_mindmap_format(mindmap)
+                    
+                    if 'id' not in mindmap:
+                        mindmap['id'] = 'root'
+                    if 'label' not in mindmap:
+                        mindmap['label'] = root_label
+                    
+                    logger.info(f"[MINDMAP] ✓ AI生成思维导图成功，节点数: {self._count_nodes(mindmap)}")
+                    return mindmap
+                except json.JSONDecodeError as e:
+                    logger.error(f"[MINDMAP] ✗ 解析AI返回的JSON失败: {e}")
+                    logger.error(f"[MINDMAP] 返回内容: {mindmap_text[:500]}")
+            else:
+                logger.error(f"[MINDMAP] ✗ AI生成思维导图失败: {result.get('error')}")
+        
+        except Exception as e:
+            logger.error(f"[MINDMAP] ✗ 调用AI服务异常: {e}", exc_info=True)
+        
+        logger.info(f"[MINDMAP] 使用默认思维导图")
+        return self._generate_default_mindmap(root_label, text)
+    
+    def _generate_default_mindmap(self, root_label, text):
+        """生成默认的思维导图作为后备"""
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
         
         mindmap = {
             'id': 'root',
-            'label': filename,
+            'label': root_label,
             'children': []
         }
         
-        # 添加内容节点
-        if keywords:
-            content_node = {
-                'id': 'content',
-                'label': '主要内容',
-                'children': []
-            }
-            for i, keyword in enumerate(keywords[:5]):
-                content_node['children'].append({
-                    'id': f'item_{i}',
-                    'label': keyword
-                })
-            mindmap['children'].append(content_node)
+        if lines:
+            main_branches = [
+                {
+                    'id': 'content',
+                    'label': '核心内容',
+                    'children': []
+                },
+                {
+                    'id': 'keywords',
+                    'label': '关键知识点',
+                    'children': []
+                },
+                {
+                    'id': 'related',
+                    'label': '关联概念',
+                    'children': []
+                }
+            ]
+            
+            for i, line in enumerate(lines[:10]):
+                if len(line) > 5:
+                    node_label = line[:30] if len(line) > 30 else line
+                    if i < 4:
+                        main_branches[0]['children'].append({
+                            'id': f'content_{i}',
+                            'label': node_label
+                        })
+                    elif i < 7:
+                        main_branches[1]['children'].append({
+                            'id': f'keyword_{i-4}',
+                            'label': node_label
+                        })
+                    else:
+                        main_branches[2]['children'].append({
+                            'id': f'related_{i-7}',
+                            'label': node_label
+                        })
+            
+            mindmap['children'] = main_branches
+        else:
+            mindmap['children'] = [
+                {'id': 'empty', 'label': '暂无内容'}
+            ]
         
         return mindmap
+    
+    def _count_nodes(self, node):
+        """递归计算节点数量"""
+        count = 1
+        if 'children' in node and node['children']:
+            for child in node['children']:
+                count += self._count_nodes(child)
+        return count
+    
+    def _convert_mindmap_format(self, node, parent_id='root', index=0):
+        """将AI返回的name格式转换为id/label格式"""
+        node_id = f"{parent_id}_{index}" if parent_id else f"node_{index}"
+        converted = {
+            'id': node_id,
+            'label': node.get('name', '')
+        }
+        
+        if 'children' in node and node['children']:
+            converted['children'] = [
+                self._convert_mindmap_format(child, node_id, i)
+                for i, child in enumerate(node['children'])
+            ]
+        
+        return converted
 
     def _generate_ai_summary(self, file_obj):
         """使用用户配置的AI模型生成摘要"""
@@ -431,9 +545,8 @@ class FileViewSet(viewsets.ModelViewSet):
         logger.info(f"[AI_SUMMARY] 提取文本长度: {len(text)} 字符")
         
         # 获取用户的AI配置
-        ai_config = file_obj.user.ai_config or {}
-        model_id = ai_config.get('model_id', 'gpt-4o-mini')
-        api_key = ai_config.get('api_key', '')
+        model_id = file_obj.user.get_document_model_id()
+        api_key = file_obj.user.get_api_key()
         
         logger.info(f"[AI_SUMMARY] 使用模型: {model_id}")
         logger.info(f"[AI_SUMMARY] API密钥: {'已设置' if api_key else '未设置'}")
@@ -521,9 +634,8 @@ class FileViewSet(viewsets.ModelViewSet):
         text = file_obj.extracted_text
         
         # 获取用户的AI配置
-        ai_config = file_obj.user.ai_config or {}
-        model_id = ai_config.get('model_id', 'gpt-4o-mini')
-        api_key = ai_config.get('api_key', '')
+        model_id = file_obj.user.get_document_model_id()
+        api_key = file_obj.user.get_api_key()
         
         # 检查是否有API密钥
         if not api_key:
@@ -591,6 +703,52 @@ class FileViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f'[AI_TAGS] ✗ AI标签生成异常: {e}', exc_info=True)
             return []
+
+    def _generate_ai_analysis(self, file_obj):
+        """使用用户配置的AI模型生成文档分析"""
+        logger.info(f"[AI_ANALYSIS] 开始生成AI文档分析...")
+        
+        text = file_obj.extracted_text
+        logger.info(f"[AI_ANALYSIS] 提取文本长度: {len(text)} 字符")
+        
+        # 获取用户的AI配置
+        model_id = file_obj.user.get_document_model_id()
+        api_key = file_obj.user.get_api_key()
+        
+        # 如果没有配置API密钥，返回默认分析
+        if not api_key:
+            logger.warning(f"[AI_ANALYSIS] ⚠ 用户 {file_obj.user.username} 未配置API密钥，跳过AI分析")
+            return "文档分析需要配置AI模型API密钥，请在设置页面配置。"
+        
+        try:
+            from apps.ai.services import ai_service
+            
+            model_config = ai_service.get_model_config(model_id)
+            if model_config and model_config.requires_api_key and not api_key:
+                logger.warning(f"[AI_ANALYSIS] ⚠ 用户 {file_obj.user.username} 未配置API密钥")
+                return "文档分析需要配置AI模型API密钥，请在设置页面配置。"
+            
+            result = ai_service.extract_text_with_ai(
+                content=text,
+                model_id=model_id,
+                api_key=api_key,
+                mode='enhanced',
+                task_type='analyze'
+            )
+            
+            logger.info(f"[AI_ANALYSIS] AI服务返回: success={result.get('success')}")
+            
+            if result.get('success') and result.get('text'):
+                analysis = result['text'].strip()
+                logger.info(f"[AI_ANALYSIS] ✓ 文档分析生成成功")
+                return analysis
+            else:
+                logger.error(f'[AI_ANALYSIS] ✗ AI文档分析生成失败: {result.get("error")}')
+                return "文档分析生成失败，请重试。"
+                
+        except Exception as e:
+            logger.error(f'[AI_ANALYSIS] ✗ AI文档分析生成异常: {e}', exc_info=True)
+            return f"文档分析生成异常: {str(e)}"
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

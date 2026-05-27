@@ -6,12 +6,117 @@ import { Sidebar } from '../components/Sidebar';
 
 const API_BASE = 'http://localhost:8000/api';
 
+interface ThinkingProcessProps {
+  thinking: string;
+  isEnabled: boolean;
+}
+
+const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking, isEnabled }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!isEnabled) return null;
+
+  return (
+    <div className="w-full">
+      <motion.div
+        className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl overflow-hidden"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-amber-100/50 transition-colors"
+        >
+          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="#F59E0B" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <path d="M9.37 17a8 8 0 1 0 8.27-13"/>
+              <path d="M9.3 7a4 4 0 1 0 4.3 6"/>
+            </svg>
+          </div>
+          <div className="flex-1 text-left">
+            <span className="text-sm font-medium text-amber-800">💡 思考过程</span>
+          </div>
+          <motion.svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#F59E0B"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            animate={{ rotate: isExpanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex-shrink-0"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </motion.svg>
+        </button>
+        
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 pl-15">
+                <div className="pl-12">
+                  <div className="bg-white/50 rounded-lg p-4 border border-amber-100">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          width="14" 
+                          height="14" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="#F59E0B" 
+                          strokeWidth="2" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M12 6v6l4 2"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {thinking}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+};
+
 interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
   content: string;
   file_ids: number[];
   created_at: string;
+  thinking?: string;
+  thinking_enabled?: boolean;
 }
 
 interface FileItem {
@@ -32,7 +137,9 @@ interface AIModel {
   model_id: string;
   name: string;
   provider: string;
+  supports_vision: boolean;
   requires_api_key: boolean;
+  supports_thinking?: boolean;
 }
 
 const AIChatPage: React.FC = () => {
@@ -42,7 +149,7 @@ const AIChatPage: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<number[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modelInfo, setModelInfo] = useState({ model: 'gpt-4o-mini', name: 'AI助手' });
+  const [modelInfo, setModelInfo] = useState({ model: 'glm-4-flash-250414', name: 'GLM-4-Flash-250414' });
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [chatHistories, setChatHistories] = useState<ChatHistoryItem[]>([]);
@@ -81,8 +188,8 @@ const AIChatPage: React.FC = () => {
         headers: { Authorization: `Token ${token}` }
       });
       setModelInfo({
-        model: response.data.config.model_id,
-        name: response.data.current_model?.name || 'AI助手'
+        model: response.data.config.chat_model_id,
+        name: response.data.config.chat_model_name || response.data.current_model?.name || 'AI助手'
       });
       setAvailableModels(response.data.available_models || []);
     } catch (error) {
@@ -180,7 +287,9 @@ const AIChatPage: React.FC = () => {
         role: 'assistant',
         content: response.data.response,
         file_ids: selectedFiles,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        thinking: response.data.thinking || '',
+        thinking_enabled: response.data.thinking_enabled || false
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -218,25 +327,6 @@ const AIChatPage: React.FC = () => {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
-
-  const handleModelChange = async (modelId: string) => {
-    try {
-      const response = await axios.put(
-        `${API_BASE}/ai/config/`,
-        { model_id: modelId },
-        { headers: { Authorization: `Token ${token}` } }
-      );
-      if (response.data.success) {
-        setModelInfo({
-          model: modelId,
-          name: availableModels.find(m => m.model_id === modelId)?.name || 'AI助手'
-        });
-        setShowModelSelector(false);
-      }
-    } catch (error) {
-      console.error('切换模型失败:', error);
-    }
-  };
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
@@ -246,6 +336,40 @@ const AIChatPage: React.FC = () => {
       return '昨天';
     } else {
       return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const [modelChangeMessage, setModelChangeMessage] = useState<{show: boolean, text: string, type: 'success' | 'error'} | null>(null);
+  
+  const handleModelChange = async (modelId: string) => {
+    try {
+      const response = await axios.put(
+        `${API_BASE}/ai/config/`,
+        { chat_model_id: modelId },
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      if (response.data.success) {
+        const selectedModel = availableModels.find(m => m.model_id === modelId);
+        setModelInfo({
+          model: modelId,
+          name: selectedModel?.name || 'AI助手'
+        });
+        setShowModelSelector(false);
+        setModelChangeMessage({
+          show: true,
+          text: `✓ 已切换到 ${selectedModel?.name}，设置已同步更新`,
+          type: 'success'
+        });
+        setTimeout(() => setModelChangeMessage(null), 3000);
+      }
+    } catch (error) {
+      console.error('切换模型失败:', error);
+      setModelChangeMessage({
+        show: true,
+        text: '切换模型失败，请重试',
+        type: 'error'
+      });
+      setTimeout(() => setModelChangeMessage(null), 3000);
     }
   };
 
@@ -386,6 +510,24 @@ const AIChatPage: React.FC = () => {
       </div>
 
       <div className="flex-1 flex flex-col">
+        {/* 模型切换提示 */}
+        <AnimatePresence>
+          {modelChangeMessage?.show && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className={`absolute top-2 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg border-l-4 ${
+                modelChangeMessage.type === 'success'
+                  ? 'bg-green-50 border-green-500 text-green-700'
+                  : 'bg-red-50 border-red-500 text-red-700'
+              }`}
+            >
+              <p className="text-sm font-medium">{modelChangeMessage.text}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         <div className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
@@ -431,40 +573,101 @@ const AIChatPage: React.FC = () => {
                   initial={{ opacity: 0, y: -10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  className="absolute right-6 top-14 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 min-w-[250px] max-h-[300px] overflow-y-auto"
+                  className="absolute right-6 top-14 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 min-w-[320px] max-h-[400px] overflow-y-auto"
                 >
                   <div className="px-3 py-2 border-b border-gray-100">
                     <p className="text-xs text-gray-500 font-medium">选择AI模型</p>
                   </div>
-                  {availableModels.map((model) => (
-                    <motion.button
-                      key={model.model_id}
-                      onClick={() => handleModelChange(model.model_id)}
-                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
-                        modelInfo.model === model.model_id ? 'bg-[#10A37F]/5' : ''
-                      }`}
-                      whileHover={{ x: 4 }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{model.name}</p>
-                          <p className="text-xs text-gray-500">{model.provider}</p>
-                        </div>
-                        {modelInfo.model === model.model_id && (
-                          <motion.span
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="px-2 py-0.5 bg-[#10A37F] text-white text-xs rounded-full"
-                          >
-                            当前
-                          </motion.span>
-                        )}
+                  
+                  {/* 多模态模型（带V）*/}
+                  {availableModels.filter(m => m.supports_vision).length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                        <p className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                          <span>🎨</span> 多模态模型（带V）
+                        </p>
+                        <p className="text-[10px] text-blue-400">适合看图说话、视觉问答</p>
                       </div>
-                      {!model.requires_api_key && (
-                        <span className="text-xs text-green-600 mt-1 inline-block">✓ 本地模型，无需API密钥</span>
-                      )}
-                    </motion.button>
-                  ))}
+                      {availableModels.filter(m => m.supports_vision).map((model) => (
+                        <motion.button
+                          key={model.model_id}
+                          onClick={() => handleModelChange(model.model_id)}
+                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
+                            modelInfo.model === model.model_id ? 'bg-[#10A37F]/5' : ''
+                          }`}
+                          whileHover={{ x: 4 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{model.name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-gray-500">{model.provider}</p>
+                                {model.supports_thinking && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">🧠 思考</span>
+                                )}
+                                <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">👁️ 视觉</span>
+                              </div>
+                            </div>
+                            {modelInfo.model === model.model_id && (
+                              <motion.span
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="px-2 py-0.5 bg-[#10A37F] text-white text-xs rounded-full"
+                              >
+                                当前
+                              </motion.span>
+                            )}
+                          </div>
+                        </motion.button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* 纯文本模型 */}
+                  {availableModels.filter(m => !m.supports_vision).length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 mt-1">
+                        <p className="text-xs text-gray-600 font-medium flex items-center gap-1">
+                          <span>📝</span> 纯文本模型
+                        </p>
+                        <p className="text-[10px] text-gray-400">适合写代码、对话、文本处理</p>
+                      </div>
+                      {availableModels.filter(m => !m.supports_vision).map((model) => (
+                        <motion.button
+                          key={model.model_id}
+                          onClick={() => handleModelChange(model.model_id)}
+                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
+                            modelInfo.model === model.model_id ? 'bg-[#10A37F]/5' : ''
+                          }`}
+                          whileHover={{ x: 4 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{model.name}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-gray-500">{model.provider}</p>
+                                {model.supports_thinking && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">🧠 思考</span>
+                                )}
+                              </div>
+                            </div>
+                            {modelInfo.model === model.model_id && (
+                              <motion.span
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="px-2 py-0.5 bg-[#10A37F] text-white text-xs rounded-full"
+                              >
+                                当前
+                              </motion.span>
+                            )}
+                          </div>
+                          {!model.requires_api_key && (
+                            <span className="text-xs text-green-600 mt-1 inline-block">✓ 本地模型，无需API密钥</span>
+                          )}
+                        </motion.button>
+                      ))}
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -565,6 +768,20 @@ const AIChatPage: React.FC = () => {
                         </div>
                       )}
                     </div>
+                    
+                    {/* 思考过程 - 可折叠 */}
+                    {message.role === 'assistant' && (message.thinking || message.thinking_enabled) && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-2 w-full"
+                      >
+                        <ThinkingProcess
+                          thinking={message.thinking || '正在分析问题...'}
+                          isEnabled={message.thinking_enabled || false}
+                        />
+                      </motion.div>
+                    )}
                   </div>
                 </motion.div>
               ))}

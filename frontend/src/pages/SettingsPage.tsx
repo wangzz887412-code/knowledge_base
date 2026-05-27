@@ -14,7 +14,10 @@ interface AIModel {
 }
 
 interface AIConfig {
-  model_id: string;
+  chat_model_id: string;
+  chat_model_name: string;
+  document_model_id: string;
+  document_model_name: string;
   api_key: string;
   enable_vision: boolean;
   enable_thinking: boolean;
@@ -22,7 +25,10 @@ interface AIConfig {
 
 const SettingsPage: React.FC = () => {
   const [config, setConfig] = useState<AIConfig>({
-    model_id: 'gpt-4o-mini',
+    chat_model_id: 'glm-4-flash-250414',
+    chat_model_name: 'GLM-4-Flash-250414',
+    document_model_id: 'glm-4-flash-250414',
+    document_model_name: 'GLM-4-Flash-250414',
     api_key: '',
     enable_vision: false,
     enable_thinking: false
@@ -87,7 +93,7 @@ const SettingsPage: React.FC = () => {
       const response = await axios.post(
         `${API_BASE}/ai/test-connection/`,
         {
-          model_id: config.model_id,
+          model_id: config.chat_model_id,
           api_key: config.api_key
         },
         { headers: { Authorization: `Token ${token}` } }
@@ -106,7 +112,9 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const selectedModel = availableModels.find(m => m.model_id === config.model_id);
+  const selectedChatModel = availableModels.find(m => m.model_id === config.chat_model_id);
+  const selectedDocModel = availableModels.find(m => m.model_id === config.document_model_id);
+  const selectedModel = selectedChatModel;
 
   if (loading) {
     return (
@@ -148,20 +156,26 @@ const SettingsPage: React.FC = () => {
           )}
 
           <div className="space-y-6">
-            {/* 模型选择 */}
+            {/* AI助手模型选择 */}
             <div className="bg-white rounded-2xl shadow-md p-6 border border-paper-dark">
               <h3 className="text-xl font-bold text-ink mb-4 font-serif flex items-center">
-                <span className="mr-2">🤖</span> 模型选择
+                <span className="mr-2">💬</span> AI助手模型
               </h3>
+              <p className="text-sm text-ink-light font-serif mb-4">
+                用于AI助手对话功能，可以随时在聊天界面切换
+              </p>
               
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-ink-light mb-2 font-serif">
-                    选择AI模型
+                    选择聊天模型
                   </label>
                   <select
-                    value={config.model_id}
-                    onChange={(e) => setConfig({ ...config, model_id: e.target.value })}
+                    value={config.chat_model_id}
+                    onChange={(e) => {
+                      const model = availableModels.find(m => m.model_id === e.target.value);
+                      setConfig({ ...config, chat_model_id: e.target.value, chat_model_name: model?.name || e.target.value });
+                    }}
                     className="w-full px-4 py-3 bg-paper border border-paper-dark rounded-xl 
                              text-ink font-serif focus:outline-none focus:border-leather 
                              focus:ring-2 focus:ring-leather/20 transition-all"
@@ -176,41 +190,85 @@ const SettingsPage: React.FC = () => {
                   </select>
                 </div>
 
-                {selectedModel && (
+                {selectedChatModel && (
                   <div className="p-4 bg-paper rounded-xl">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="font-semibold text-ink-light">提供商：</span>
-                        <span className="text-ink font-serif">{selectedModel.provider}</span>
+                        <span className="text-ink font-serif">{selectedChatModel.provider}</span>
                       </div>
                       <div>
                         <span className="font-semibold text-ink-light">视觉能力：</span>
-                        <span className={`font-serif ${selectedModel.supports_vision ? 'text-green-600' : 'text-gray-500'}`}>
-                          {selectedModel.supports_vision ? '✓ 支持' : '✗ 不支持'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-ink-light">API密钥：</span>
-                        <span className={`font-serif ${selectedModel.requires_api_key ? 'text-leather' : 'text-green-600'}`}>
-                          {selectedModel.requires_api_key ? '需要' : '✓ 不需要'}
+                        <span className={`font-serif ${selectedChatModel.supports_vision ? 'text-green-600' : 'text-gray-500'}`}>
+                          {selectedChatModel.supports_vision ? '✓ 支持' : '✗ 不支持'}
                         </span>
                       </div>
                       <div>
                         <span className="font-semibold text-ink-light">思考能力：</span>
-                        <span className={`font-serif ${selectedModel.supports_thinking ? 'text-green-600' : 'text-gray-500'}`}>
-                          {selectedModel.supports_thinking ? '✓ 支持' : '✗ 不支持'}
+                        <span className={`font-serif ${selectedChatModel.supports_thinking ? 'text-green-600' : 'text-gray-500'}`}>
+                          {selectedChatModel.supports_thinking ? '✓ 支持' : '✗ 不支持'}
                         </span>
                       </div>
                     </div>
-                    
-                    {!selectedModel.requires_api_key && (
-                      <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                        <div className="text-sm text-green-700 font-serif">
-                          💡 <span className="font-semibold">本地模型提示：</span>
-                          您选择的是本地Ollama模型，无需API密钥。请确保Ollama服务正在运行。
-                        </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 文档处理模型选择 */}
+            <div className="bg-white rounded-2xl shadow-md p-6 border border-paper-dark">
+              <h3 className="text-xl font-bold text-ink mb-4 font-serif flex items-center">
+                <span className="mr-2">📄</span> 文档处理模型
+              </h3>
+              <p className="text-sm text-ink-light font-serif mb-4">
+                用于文档摘要、思维导图、标签生成等功能
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-ink-light mb-2 font-serif">
+                    选择文档模型
+                  </label>
+                  <select
+                    value={config.document_model_id}
+                    onChange={(e) => {
+                      const model = availableModels.find(m => m.model_id === e.target.value);
+                      setConfig({ ...config, document_model_id: e.target.value, document_model_name: model?.name || e.target.value });
+                    }}
+                    className="w-full px-4 py-3 bg-paper border border-paper-dark rounded-xl 
+                             text-ink font-serif focus:outline-none focus:border-leather 
+                             focus:ring-2 focus:ring-leather/20 transition-all"
+                  >
+                    {availableModels.map((model) => (
+                      <option key={model.model_id} value={model.model_id}>
+                        {model.name} ({model.provider})
+                        {model.supports_vision ? ' 🧿' : ''}
+                        {model.supports_thinking ? ' 💭' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedDocModel && (
+                  <div className="p-4 bg-paper rounded-xl">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-ink-light">提供商：</span>
+                        <span className="text-ink font-serif">{selectedDocModel.provider}</span>
                       </div>
-                    )}
+                      <div>
+                        <span className="font-semibold text-ink-light">视觉能力：</span>
+                        <span className={`font-serif ${selectedDocModel.supports_vision ? 'text-green-600' : 'text-gray-500'}`}>
+                          {selectedDocModel.supports_vision ? '✓ 支持' : '✗ 不支持'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-ink-light">思考能力：</span>
+                        <span className={`font-serif ${selectedDocModel.supports_thinking ? 'text-green-600' : 'text-gray-500'}`}>
+                          {selectedDocModel.supports_thinking ? '✓ 支持' : '✗ 不支持'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -226,7 +284,7 @@ const SettingsPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-semibold text-ink-light mb-2 font-serif">
                     API密钥
-                    {selectedModel?.requires_api_key && (
+                    {selectedChatModel?.requires_api_key && (
                       <span className="ml-2 text-xs bg-gold/20 text-gold px-2 py-1 rounded-full">
                         必需
                       </span>
@@ -237,8 +295,8 @@ const SettingsPage: React.FC = () => {
                       type={showApiKey ? 'text' : 'password'}
                       value={config.api_key}
                       onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
-                      placeholder={selectedModel?.requires_api_key ? '请输入API密钥...' : '该模型不需要API密钥'}
-                      disabled={!selectedModel?.requires_api_key}
+                      placeholder={selectedChatModel?.requires_api_key ? '请输入API密钥...' : '该模型不需要API密钥'}
+                      disabled={!selectedChatModel?.requires_api_key}
                       className="w-full px-4 py-3 pr-20 bg-paper border border-paper-dark rounded-xl 
                                text-ink font-serif focus:outline-none focus:border-leather 
                                focus:ring-2 focus:ring-leather/20 transition-all

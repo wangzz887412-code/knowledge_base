@@ -31,6 +31,7 @@ class File(models.Model):
     process_message = models.CharField(max_length=255, blank=True, null=True)
     extracted_text = models.TextField(blank=True, null=True)
     ai_summary = models.TextField(blank=True, null=True)
+    ai_analysis = models.TextField(blank=True, null=True)
     mindmap_data = models.JSONField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     is_public = models.BooleanField(default=False)

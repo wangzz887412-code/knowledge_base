@@ -12,3 +12,4 @@ Pillow
 chromadb
 openai
 requests
+PyJWT
