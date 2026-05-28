@@ -1,33 +1,43 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import axios from 'axios';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import axios from "axios";
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = "http://localhost:8000/api";
 
 interface User {
   id: number;
   username: string;
-  email: string;
+  email?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("token"),
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
+      axios.defaults.headers.common["Authorization"] = `Token ${token}`;
       fetchUserProfile();
     } else {
       setLoading(false);
@@ -51,16 +61,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       password,
     });
     const newToken = response.data.token;
-    localStorage.setItem('token', newToken);
+    localStorage.setItem("token", newToken);
     setToken(newToken);
-    axios.defaults.headers.common['Authorization'] = `Token ${newToken}`;
+    axios.defaults.headers.common["Authorization"] = `Token ${newToken}`;
     await fetchUserProfile();
   };
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = async (
+    username: string,
+    password: string,
+  ) => {
     const response = await axios.post(`${API_BASE}/users/register/`, {
       username,
-      email,
       password,
       password2: password,
     });
@@ -68,14 +80,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem("token");
     setToken(null);
     setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
+    delete axios.defaults.headers.common["Authorization"];
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider
+      value={{ user, token, login, register, logout, loading }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -84,7 +98,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

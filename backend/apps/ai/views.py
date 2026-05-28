@@ -267,15 +267,25 @@ class AIChatView(APIView):
                         elif doc.ai_summary:
                             chat_prompt += f"\n--- 文件: {doc.filename} (摘要) ---\n{doc.ai_summary}\n"
             
-            # 获取对应提供商的API Key
+            # 获取对应提供商的API Key - 修复后的逻辑
             api_key = ''
-            try:
-                from .services import ai_service
-                model_config = ai_service.get_model_config(model_id)
-                if model_config and model_config.requires_api_key:
+            from .services import ai_service
+            model_config = ai_service.get_model_config(model_id)
+            if model_config:
+                logger.info(f"[AI_CHAT] 模型配置: {model_id}, 提供商: {model_config.provider}, 需要API密钥: {model_config.requires_api_key}")
+                
+                if model_config.requires_api_key:
                     api_key = request.user.get_provider_api_key(model_config.provider)
-            except:
-                api_key = request.user.get_api_key()
+                    logger.info(f"[AI_CHAT] 获取到的API密钥长度: {len(api_key) if api_key else 0}")
+                    
+                    # 兼容旧格式
+                    if not api_key:
+                        old_api_key = request.user.get_api_key()
+                        if old_api_key:
+                            api_key = old_api_key
+                            logger.info(f"[AI_CHAT] 使用旧格式API密钥，长度: {len(api_key)}")
+                else:
+                    logger.info(f"[AI_CHAT] 模型不需要API密钥")
             
             # 直接发送用户消息，让AI自由回答
             response_data = self._generate_response(chat_prompt, '', model_id, api_key, image_data, conversation_history)
@@ -654,20 +664,9 @@ class MindMapRelationView(APIView):
                 'code': 'RELATION_ERROR'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def _generate_mindmap_from_text(self, text, file_id):
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        nodes = []
-        for i, line in enumerate(lines[:20]):
-            nodes.append({
-                'id': f'node_{i}',
-                'label': line[:50],
-                'children': []
-            })
-        return {
-            'id': f'root_{file_id}',
-            'label': f'思维导图_{file_id}',
-            'children': nodes
-        }
+    def _generate_mindmap_from_text(self, text, file_id, user=None):
+        from .tasks import generate_mindmap
+        return generate_mindmap(file_id, text)
     
     def _analyze_relations(self, mindmap_data, user):
         from .services import ai_service
@@ -1020,4 +1019,97 @@ class AIConnectionTestView(APIView):
             return Response({
                 'success': False,
                 'error': f'测试失败: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MindMapRegenerateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            file_id = request.data.get('file_id')
+
+            if not file_id:
+                return Response({
+                    'error': '文件ID不能为空',
+                    'code': 'EMPTY_FILE_ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            File = apps.get_model('files', 'File')
+            try:
+                file_obj = File.objects.get(id=file_id, user=request.user)
+            except File.DoesNotExist:
+                return Response({
+                    'error': '文件不存在',
+                    'code': 'FILE_NOT_FOUND'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            text = file_obj.extracted_text
+            if not text:
+                return Response({
+                    'error': '文件没有提取到文本内容',
+                    'code': 'NO_TEXT'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user = request.user
+            model_id = user.get_document_model_id()
+            api_key = ''
+
+            from .services import ai_service as svc
+            model_config = svc.get_model_config(model_id)
+            if model_config and model_config.requires_api_key:
+                api_key = user.get_provider_api_key(model_config.provider)
+                if not api_key:
+                    api_key = user.get_api_key()
+
+            if model_config and model_config.requires_api_key and not api_key:
+                return Response({
+                    'error': '请先在设置中配置AI模型和API密钥',
+                    'code': 'NO_API_KEY'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            text_for_ai = text[:12000]
+
+            logger.info(f'用户 {user.username} 手动触发AI思维导图生成 file_id={file_id}')
+            result = svc.extract_text_with_ai(
+                content=f'请为以下文档内容生成思维导图：\n\n{text_for_ai}',
+                model_id=model_id,
+                api_key=api_key,
+                mode='enhanced',
+                task_type='mindmap'
+            )
+
+            if result.get('success') and result.get('text'):
+                from .tasks import parse_mindmap_json, count_nodes
+                mindmap_data = parse_mindmap_json(result['text'])
+
+                if mindmap_data:
+                    file_obj.mindmap_data = mindmap_data
+                    file_obj.save()
+                    node_count = count_nodes(mindmap_data)
+                    logger.info(f'手动AI思维导图生成成功 file_id={file_id}, 节点数={node_count}')
+                    return Response({
+                        'success': True,
+                        'message': f'思维导图生成成功，包含 {node_count} 个节点',
+                        'node_count': node_count,
+                        'mindmap_data': mindmap_data
+                    })
+                else:
+                    return Response({
+                        'error': 'AI生成的思维导图格式解析失败，请重试',
+                        'code': 'PARSE_ERROR',
+                        'raw_text': result['text'][:500]
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                error_msg = result.get('error', 'AI服务调用失败')
+                return Response({
+                    'error': f'AI生成失败: {error_msg}',
+                    'code': 'AI_ERROR'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            logger.error(f'重新生成思维导图失败: {e}', exc_info=True)
+            return Response({
+                'error': f'生成失败: {str(e)}',
+                'code': 'INTERNAL_ERROR'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

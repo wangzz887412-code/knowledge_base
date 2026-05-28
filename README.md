@@ -1,71 +1,73 @@
 # 智能知识库系统 (Knowledge Base)
 
-一个现代化的智能文档管理和AI问答系统，支持多种AI模型进行文档分析、摘要生成和智能问答。
+一个现代化的智能文档管理和AI问答系统，支持多种AI模型进行文档分析、摘要生成、思维导图和智能问答。
 
 ## 🚀 功能特点
 
 ### 📁 文档管理
 - **多格式支持**: 支持 PDF、Word、PPT、TXT 等多种文档格式
-- **拖拽上传**: 简单易用的文件上传界面
+- **拖拽上传**: 简单易用的文件上传界面，带实时进度显示
 - **文档分类**: 自动分类和标签管理
-- **版本控制**: 支持文档版本管理
+- **书签功能**: 收藏重要文档，快速访问
 - **全文搜索**: 支持文档内容搜索和高亮显示
 
 ### 🤖 AI 功能
-- **智能摘要**: 使用AI模型自动生成文档摘要
-- **自动标签**: AI自动为文档生成标签
-- **智能问答**: 基于上传的文档进行智能问答
-- **多种模型**: 支持OpenAI、通义千问、Ollama本地模型等
-- **模型切换**: 从界面直接切换不同的AI模型
+- **智能摘要**: 使用 AI 自动生成文档摘要
+- **自动标签/分类**: AI 自动为文档生成标签和分类
+- **智能问答**: 基于上传文档的智能问答，支持多模态（文字+图片）
+- **多种模型**: 支持 OpenAI、智谱 GLM（免费）、通义千问、Ollama 本地模型
+- **模型切换**: 聊天页面顶部一键切换 AI 模型
+- **思考过程**: 显示 AI 推理思考过程（支持 GLM-4.7 等模型）
 
-### 🧠 智能分析
-- **思维导图**: 自动根据文档内容生成思维导图
-- **知识图谱**: 可视化展示文档关系
-- **语义搜索**: 基于向量数据库的语义搜索
+### 🧠 思维导图 (Obsidian 风格)
+- **AI 精准生成**: AI 深度分析文档，按五大类别（定义概念/核心原理/方法技术/应用场景/关联知识）组织知识框架
+- **Obsidian 风格美学**: 柔和配色、贝塞尔曲线连线、彩色 Accent Bar、毛玻璃工具栏
+- **AI 重新生成**: 随时手动触发 AI 精炼，确保内容准确完整
+- **节点搜索**: 关键词即时匹配所有节点
+- **AI 关联分析**: 自动分析知识点间语义关联，支持 6 种关联类型
+- **导出功能**: 支持 PNG（2x 高清）和 PDF 导出
+
+### 🐱 桌面宠物 (Codex 风格)
+- 悬浮在屏幕右下角，支持拖拽移动
+- 多种情绪状态：空闲、开心、思考、困倦、兴奋
+- 点击互动（粒子特效）、双击兴奋
+- 定时气泡消息和情绪切换
 
 ### 📱 用户体验
 - **响应式设计**: 完美适配手机、平板和电脑
-- **流畅动画**: 使用Framer Motion实现丝滑的交互动画
-- **深色/浅色模式**: 支持多种主题切换
+- **流畅动画**: Framer Motion 丝滑交互动画
 - **书签功能**: 收藏重要文档
 
 ## 🛠️ 技术栈
 
 ### 后端
 - **Python 3.10+**
-- **Django 5.x** - Web框架
-- **Django REST Framework** - API框架
-- **PostgreSQL** - 关系型数据库
-- **Redis** - 缓存和消息队列
+- **Django 5.x**
+- **Django REST Framework**
+- **SQLite**（开发）/ PostgreSQL（生产）
 - **ChromaDB** - 向量数据库
 - **Celery** - 异步任务
-- **Ollama** - 本地AI模型支持
 
 ### 前端
 - **React 18 + TypeScript**
 - **Vite** - 构建工具
-- **TailwindCSS 3** - CSS框架
+- **TailwindCSS 3** - CSS 框架
 - **React Router** - 路由管理
 - **Framer Motion** - 动画库
-- **Axios** - HTTP客户端
 - **@xyflow/react** - 思维导图渲染
 
-### AI集成
-- **OpenAI API** (GPT-4o, GPT-4o-mini)
-- **通义千问** (阿里云)
-- **Ollama** (本地模型，支持 qwen、gemma、deepseek等)
+### AI 集成
+- **OpenAI API** (GPT-4o 等)
+- **智谱 GLM** (GLM-4.7-Flash ⭐免费、GLM-4.6V-Flash ⭐免费)
+- **阿里云通义千问**
+- **Ollama** (本地模型支持)
 
 ## 📦 快速开始
 
 ### 环境要求
 
-确保你已经安装了以下软件：
-
-- Python 3.10 或更高版本
-- Node.js 18 或更高版本
-- PostgreSQL 14 或更高版本
-- Redis (可选，用于任务队列)
-- Ollama (可选，用于本地AI模型)
+- Python 3.10+
+- Node.js 18+
 
 ### 1. 克隆项目
 
@@ -90,54 +92,23 @@ source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
-```
 
-### 3. 配置环境变量
-
-复制示例配置文件并编辑：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env` 文件，配置数据库连接等信息：
-
-```env
-SECRET_KEY=your-secret-key-here-change-in-production
-DEBUG=True
-DB_NAME=knowledge_base
-DB_USER=postgres
-DB_PASSWORD=your-password
-DB_HOST=localhost
-DB_PORT=5432
-REDIS_URL=redis://localhost:6379/0
-```
-
-### 4. 数据库设置
-
-```bash
-# 创建数据库迁移
-python manage.py makemigrations
-
-# 执行迁移
+# 数据库迁移
 python manage.py migrate
 
 # 创建超级用户
 python manage.py createsuperuser
+
+# 启动后端
+python manage.py runserver
 ```
 
-### 5. 启动后端服务
+后端服务: http://localhost:8000
+
+### 3. 前端安装
 
 ```bash
-python manage.py runserver 0.0.0.0:8000
-```
-
-后端服务将在 [http://localhost:8000](http://localhost:8000) 启动。
-
-### 6. 前端安装
-
-```bash
-cd ../frontend
+cd frontend
 
 # 安装依赖
 npm install
@@ -146,201 +117,98 @@ npm install
 npm run dev
 ```
 
-前端服务将在 [http://localhost:5173](http://localhost:5173) 启动。
+前端服务: http://localhost:5174
 
-## 🤖 配置AI模型
+## 🤖 配置 AI 模型
 
-### 使用Ollama本地模型
+### 智谱 GLM（推荐，免费额度）
+1. 注册 [智谱 AI 开放平台](https://open.bigmodel.cn/)
+2. 获取 API Key（格式: `{id}.{secret}`）
+3. 在设置页面选择 GLM 模型并填入 API Key
+4. GLM-4.7-Flash 和 GLM-4.6V-Flash 提供完全免费额度
 
-1. 安装Ollama: [https://ollama.com/](https://ollama.com/)
-
-2. 拉取模型：
-
+### 使用 Ollama 本地模型
 ```bash
-# 下载小模型（推荐）
 ollama pull qwen2.5:0.5b
-ollama pull qwen3.5:0.8b
-ollama pull qwen3.5:2b
 ollama pull qwen3.5:4b
-
-# 或者下载更大的模型
-ollama pull qwen3.5:9b
-ollama pull deepseek-r1:7b
 ```
 
-3. 在系统设置中选择Ollama模型即可使用。
-
-### 使用OpenAI/通义千问API
-
-1. 在系统设置中配置API密钥
-2. 选择相应的模型即可
-
-## 📚 API文档
-
-后端服务启动后，访问以下地址查看API文档：
-
-- **Swagger UI**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
-- **Admin后台**: [http://localhost:8000/admin/](http://localhost:8000/admin/)
+### 使用 OpenAI / 通义千问 API
+在设置页面配置对应 API 密钥即可。
 
 ## 🏗️ 项目结构
 
 ```
 knowledge_base/
-├── backend/                      # 后端代码
-│   ├── apps/                     # Django应用
-│   │   ├── ai/                  # AI服务模块
-│   │   │   ├── models.py        # AI模型配置
-│   │   │   ├── views.py         # AI视图
-│   │   │   ├── services.py      # AI服务
-│   │   │   └── urls.py          # AI路由
-│   │   ├── files/               # 文件管理模块
-│   │   │   ├── models.py        # 文件模型
-│   │   │   ├── views.py         # 文件视图
-│   │   │   └── serializers.py   # 文件序列化
-│   │   └── users/               # 用户管理模块
-│   ├── config/                   # Django配置
-│   │   ├── settings.py          # 主配置文件
-│   │   └── urls.py              # 主路由
-│   ├── media/                    # 上传文件存储
-│   ├── chroma_db/                # 向量数据库
-│   ├── .env.example             # 环境变量示例
-│   └── requirements.txt         # Python依赖
-├── frontend/                     # 前端代码
+├── backend/
+│   ├── apps/
+│   │   ├── ai/              # AI 服务模块（聊天、音频、思维导图）
+│   │   │   ├── services.py  # AI 服务核心逻辑
+│   │   │   ├── views.py     # AI API 端点
+│   │   │   ├── tasks.py     # 异步任务（文件处理、思维导图生成）
+│   │   │   └── models.py    # AI 配置模型
+│   │   ├── files/           # 文件管理模块
+│   │   └── users/           # 用户管理模块
+│   └── config/              # Django 配置
+├── frontend/
 │   ├── src/
-│   │   ├── components/          # React组件
-│   │   │   ├── FileCard.tsx
-│   │   │   ├── FileDetailModal.tsx
-│   │   │   ├── MindMapViewer.tsx
-│   │   │   └── UploadZone.tsx
-│   │   ├── pages/               # 页面
-│   │   │   ├── Dashboard.tsx    # 仪表盘
-│   │   │   ├── AIChatPage.tsx   # AI聊天
-│   │   │   ├── SettingsPage.tsx # 设置
+│   │   ├── components/
+│   │   │   ├── MindMapViewer.tsx   # 思维导图核心组件（Obsidian 风格）
+│   │   │   ├── MindMapRenderer.tsx # 思维导图渲染器
+│   │   │   ├── DesktopPet.tsx      # 桌面宠物组件
+│   │   │   ├── FileDetailModal.tsx # 文件详情弹窗
+│   │   │   └── ...
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx       # 仪表盘
+│   │   │   ├── AIChatPage.tsx      # AI 聊天
+│   │   │   ├── SettingsPage.tsx    # 设置
+│   │   │   ├── HelpPage.tsx        # 帮助中心
 │   │   │   └── LoginPage.tsx
-│   │   ├── contexts/            # React Context
+│   │   ├── utils/
+│   │   │   └── api.ts             # 统一 API 请求工具
 │   │   └── App.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── .gitignore                   # Git忽略配置
-└── README.md                    # 这个文件
-```
-
-## 🎨 界面预览
-
-### 主要页面
-- **仪表盘**: 显示文档列表和统计信息
-- **上传页面**: 拖拽上传文档
-- **AI聊天**: 基于文档的智能问答
-- **设置页面**: 配置AI模型
-
-### 核心组件
-- **文件卡片**: 显示文档信息、摘要和标签
-- **思维导图**: 可视化文档结构
-- **模型选择器**: 切换不同的AI模型
-
-## 🔧 开发说明
-
-### 添加新的AI模型
-
-在 `backend/apps/ai/services.py` 中添加新的模型配置：
-
-```python
-# SUPPORTED_MODELS 列表中添加
-{
-    'model_id': 'your-model-id',
-    'name': 'Model Name',
-    'provider': 'Provider Name',
-    'api_base': 'https://api.example.com/v1',
-    'requires_api_key': True,
-    'supports_vision': False,
-    'max_tokens': 4096
-}
-```
-
-### 前端开发
-
-```bash
-cd frontend
-npm run dev          # 开发模式
-npm run build        # 生产构建
-npm run lint         # 代码检查
-```
-
-### 后端开发
-
-```bash
-cd backend
-python manage.py runserver
-python manage.py createsuperuser
-python manage.py makemigrations
-python manage.py migrate
+│   └── vite.config.ts             # Vite 配置（含 API 代理）
+└── README.md
 ```
 
 ## 📖 使用指南
 
 ### 上传文档
+1. 登录系统 → 点击上传区域或拖拽文件
+2. AI 自动提取文本、生成摘要
+3. 后台异步生成 AI 思维导图
 
-1. 登录系统
-2. 点击上传区域或拖拽文件
-3. 等待AI处理完成（生成摘要和标签）
+### 使用 AI 问答
+1. 进入 AI 助手页面
+2. 可选：选择参考文档
+3. 输入问题，AI 基于文档回答（支持流式响应）
 
-### 使用AI问答
+### 思维导图
+1. 上传文档后自动生成基础版
+2. 点击「✨ AI 重新生成」获得精准 AI 版
+3. 点击「🧠 分析关联」建立知识点连接
+4. 搜索框快速定位节点
 
-1. 在文档管理页面选择参考文档
-2. 进入AI助手页面
-3. 输入问题，AI会基于选中的文档回答
+## 📝 版本更新
 
-### 切换模型
+### v2.1.0 - 思维导图 Obsidian 重构 + 桌面宠物
+- 🎨 思维导图全面升级为 Obsidian 风格美学
+- 🤖 AI 精准生成思维导图（异步 + 手动重新生成）
+- 🔍 节点搜索、节点统计面板
+- 🐱 Codex 风格悬浮桌面宠物
+- 🔧 修复 Vite 代理和 API 认证问题
+- 📚 更新帮助中心和文档
 
-1. 在AI助手页面或设置页面
-2. 点击模型选择器
-3. 选择已配置的模型
-
-## 🤝 贡献
-
-欢迎贡献！请提交 Issue 和 Pull Request。
-
-### 开发规范
-
-- Python: 遵循 PEP 8
-- TypeScript: 遵循项目的 ESLint 配置
-- 提交信息: 使用清晰的描述
+### v2.0.0 - AI 增强
+- ✨ AI 思考过程展示
+- 🔄 流式响应
+- 📊 思维导图渲染器
+- 🎯 用户体验全面优化
 
 ## 📄 许可证
 
 MIT License
 
-## 📞 支持
-
-如有问题，请提交 Issue 或联系作者。
-
-## 🎉 致谢
-
-- Django 社区
-- React 社区
-- Ollama 团队
-- 所有开源贡献者
-
 ---
-
-## 📝 版本更新日志 (v2.1)
-
-### 新功能
-- ✨ **思维导图增强**: 新增独立的思维导图渲染组件 `MindMapRenderer.tsx`
-- 🧠 **AI分析功能**: 文件模型新增 `ai_analysis` 字段，存储更详细的AI分析结果
-- 🔄 **实时进度显示**: 文档处理进度实时显示（0-100%）
-- 🚀 **流式响应**: 支持AI流式回答，提升用户体验
-- 📊 **新增演示页面**: `MindMapDemo.tsx` 和 `StreamTestPage.tsx` 用于功能测试
-
-### 改进
-- 🎨 **用户界面优化**: 改善了文件详情模态框、设置页面和帮助页面
-- 🔧 **AI服务升级**: 增强了 `services.py` 和 `views.py`，支持更多AI功能
-- 📦 **依赖更新**: 更新了 `requirements.txt` 和 `package.json`
-- 🐛 **Bug修复**: 修复了多处小问题，提升系统稳定性
-
-### 技术改进
-- 增加数据库迁移 `0004_file_ai_analysis.py`
-- 优化前端构建配置 `vite.config.ts`
-- 完善路由配置和组件结构
 
 **Star ⭐ 这个仓库，如果你觉得有用！**

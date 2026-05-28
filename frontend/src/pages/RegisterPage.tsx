@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 
 const RegisterPage: React.FC = () => {
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,7 +23,7 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await register(username, email, password);
+      await register(username, password);
       navigate('/login');
     } catch (err: any) {
       const errorData = err.response?.data;
@@ -32,9 +31,6 @@ const RegisterPage: React.FC = () => {
         const errorMessages = [];
         if (errorData.errors.username) {
           errorMessages.push(`用户名: ${errorData.errors.username.join(', ')}`);
-        }
-        if (errorData.errors.email) {
-          errorMessages.push(`邮箱: ${errorData.errors.email.join(', ')}`);
         }
         if (errorData.errors.password) {
           errorMessages.push(`密码: ${errorData.errors.password.join(', ')}`);
@@ -82,21 +78,6 @@ const RegisterPage: React.FC = () => {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-3 bg-paper border border-leather-light rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
               placeholder="请输入用户名"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-ink mb-2" htmlFor="email">
-              邮箱
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-paper border border-leather-light rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
-              placeholder="请输入邮箱"
               required
             />
           </div>

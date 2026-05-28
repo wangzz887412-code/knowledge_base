@@ -14,6 +14,9 @@ class User(AbstractUser):
     cloud_config = models.JSONField(default=dict, blank=True)
     ai_config = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
+    
+    # 让email字段变为可选
+    email = models.EmailField(blank=True, null=True)
 
     def get_chat_model_id(self):
         return self.ai_config.get('chat_model_id', self.ai_config.get('model_id', 'glm-4-flash-250414'))

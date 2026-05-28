@@ -7,7 +7,8 @@ from .views import (
     AIConfigView,
     AIConnectionTestView,
     MindMapRelationView,
-    MindMapEditView
+    MindMapEditView,
+    MindMapRegenerateView
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     path('test-connection/', AIConnectionTestView.as_view(), name='test_connection'),
     path('mindmap/analyze-relations/', MindMapRelationView.as_view(), name='analyze_relations'),
     path('mindmap/edit/', MindMapEditView.as_view(), name='edit_mindmap'),
+    path('mindmap/regenerate/', MindMapRegenerateView.as_view(), name='regenerate_mindmap'),
 ]
