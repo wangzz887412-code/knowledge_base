@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type FC, type MouseEvent as ReactMouseEvent } from "react";
 import { motion } from "framer-motion";
 import {
   ReactFlow,
@@ -9,7 +9,6 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
   Connection,
   Handle,
   Position,
@@ -21,22 +20,29 @@ import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { apiPost } from "../utils/api";
 
-interface MindMapNodeData {
+type MindMapNodeData = {
   label: string;
   isRoot?: boolean;
   description?: string;
   depth?: number;
   branchColor?: string;
   childCount?: number;
-}
+};
 
-interface RelationData {
+type RelationData = {
   id: string;
   source: string;
   target: string;
   type: string;
   description: string;
-}
+};
+
+type MindMapEdgeData = {
+  relation?: RelationData;
+};
+
+type AppNode = Node<MindMapNodeData>;
+type AppEdge = Edge<MindMapEdgeData>;
 
 const RELATION_COLORS: Record<string, string> = {
   related_to: "#7c8a9a",
@@ -75,32 +81,32 @@ const ROOT_COLOR = {
   glow: "rgba(108, 95, 167, 0.4)",
 };
 
-interface MindMapNodeProps extends NodeProps {
+interface MindMapNodeComponentProps extends NodeProps {
+  data: MindMapNodeData;
   maxWidth?: number;
 }
 
-const MindMapNode: React.FC<MindMapNodeProps> = ({
+const MindMapNode: FC<MindMapNodeComponentProps> = ({
   data,
   selected,
   maxWidth = 300,
 }) => {
-  const nodeData = data as unknown as MindMapNodeData;
-  const isRoot = nodeData.isRoot;
-  const depth = nodeData.depth || 0;
-  const labelLength = nodeData.label?.length || 0;
+  const isRoot = data.isRoot;
+  const depth = data.depth || 0;
+  const labelLength = data.label?.length || 0;
 
   const nodeWidth = isRoot
     ? Math.min(maxWidth, Math.max(220, labelLength * 9 + 40))
     : Math.min(maxWidth, Math.max(160, labelLength * 8));
 
-  const branchColor = nodeData.branchColor || "#c4a2d4";
+  const branchColor = data.branchColor || "#c4a2d4";
 
   const bgColor = isRoot ? ROOT_COLOR.bg : selected ? "#e8e0ef" : "#faf8fc";
   const borderColor = isRoot
     ? ROOT_COLOR.border
     : selected
-      ? "#8b6fc0"
-      : branchColor;
+    ? "#8b6fc0"
+    : branchColor;
   const textColor = isRoot ? ROOT_COLOR.text : "#3d3648";
 
   return (
@@ -121,8 +127,8 @@ const MindMapNode: React.FC<MindMapNodeProps> = ({
         boxShadow: isRoot
           ? `0 4px 24px ${ROOT_COLOR.glow}, 0 2px 8px rgba(74, 63, 107, 0.3)`
           : selected
-            ? "0 2px 16px rgba(139, 111, 192, 0.25), 0 1px 4px rgba(0,0,0,0.06)"
-            : "0 1px 4px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
+          ? "0 2px 16px rgba(139, 111, 192, 0.25), 0 1px 4px rgba(0,0,0,0.06)"
+          : "0 1px 4px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
         fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
       }}
     >
@@ -167,9 +173,9 @@ const MindMapNode: React.FC<MindMapNodeProps> = ({
           wordBreak: "break-word",
         }}
       >
-        {nodeData.label}
+        {data.label}
       </div>
-      {nodeData.description && (
+      {data.description && (
         <div
           style={{
             fontSize: "11px",
@@ -179,7 +185,7 @@ const MindMapNode: React.FC<MindMapNodeProps> = ({
             wordBreak: "break-word",
           }}
         >
-          {nodeData.description}
+          {data.description}
         </div>
       )}
       {isRoot && (
@@ -201,7 +207,11 @@ const MindMapNode: React.FC<MindMapNodeProps> = ({
   );
 };
 
-const RelationEdge: React.FC<EdgeProps> = ({
+interface RelationEdgeProps extends EdgeProps {
+  data?: MindMapEdgeData;
+}
+
+const RelationEdge: FC<RelationEdgeProps> = ({
   id,
   sourceX,
   sourceY,
@@ -209,10 +219,10 @@ const RelationEdge: React.FC<EdgeProps> = ({
   targetY,
   data,
 }) => {
-  const relationData = data as unknown as RelationData;
-  const color = RELATION_COLORS[relationData?.type] || "#7c8a9a";
+  const relation = data?.relation;
+  const color = RELATION_COLORS[relation?.type || ""] || "#7c8a9a";
   const label =
-    relationData?.description || RELATION_LABELS[relationData?.type] || "";
+    relation?.description || RELATION_LABELS[relation?.type || ""] || "";
 
   const midX = (sourceX + targetX) / 2;
   const midY = (sourceY + targetY) / 2 + 20;
@@ -248,7 +258,7 @@ const RelationEdge: React.FC<EdgeProps> = ({
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#5c5470"
-            fontSize="11"
+            fontSize="11px"
             fontWeight={500}
           >
             {label}
@@ -258,8 +268,6 @@ const RelationEdge: React.FC<EdgeProps> = ({
     </>
   );
 };
-
-const edgeTypes = { relation: RelationEdge };
 
 interface MindMapData {
   id: string;
@@ -274,15 +282,173 @@ interface MindMapViewerProps {
   onNodeClick?: (nodeId: string, nodeLabel: string) => void;
 }
 
-export const MindMapViewer: React.FC<MindMapViewerProps> = ({
+const MAX_DEPTH = 5;
+const NODE_HEIGHT = 56;
+const ROOT_X = 120;
+const ROOT_PADDING_TOP = 120;
+
+const LevelSpacing = 280;
+const NodeGap = 70;
+
+function calculateSubtreeHeight(item: MindMapData, _depth: number = 0): number {
+  if (!item.children || item.children.length === 0) {
+    return NODE_HEIGHT + NodeGap;
+  }
+  const childrenHeight = item.children
+    .slice(0, 8)
+    .reduce(
+      (acc, child) => acc + calculateSubtreeHeight(child, _depth + 1),
+      0,
+    );
+  return Math.max(NODE_HEIGHT + NodeGap, childrenHeight);
+}
+
+function RootCenterYForChildren(
+  children: MindMapData[],
+  yStart: number,
+): number {
+  let total = 0;
+  children.slice(0, 8).forEach((child) => {
+    total += calculateSubtreeHeight(child);
+  });
+  return yStart + total / 2;
+}
+
+function convertToNodesAndEdges(
+  mindMapData: MindMapData | null,
+): { nodes: AppNode[]; edges: AppEdge[] } {
+  if (!mindMapData) return { nodes: [], edges: [] };
+
+  const nodesList: AppNode[] = [];
+  const edgesList: AppEdge[] = [];
+
+  function addNode(
+    item: MindMapData,
+    parentId: string | null,
+    depth: number,
+    branchColor: string,
+    yStart: number,
+  ): number {
+    if (depth > MAX_DEPTH) return yStart;
+
+    const nodeId = item.id;
+    const isRoot = depth === 0;
+
+    const subtreeH = calculateSubtreeHeight(item, depth);
+    const y = yStart + subtreeH / 2;
+
+    nodesList.push({
+      id: nodeId,
+      type: "mindMapNode",
+      position: { x: ROOT_X + depth * LevelSpacing, y },
+      data: {
+        label: item.label,
+        isRoot,
+        depth,
+        branchColor,
+        childCount: item.children?.length || 0,
+      },
+    });
+
+    if (parentId && !isRoot) {
+      edgesList.push({
+        id: `e-${parentId}-${nodeId}`,
+        source: parentId,
+        target: nodeId,
+        type: "default",
+        animated: false,
+        style: {
+          stroke: branchColor,
+          strokeWidth: depth === 1 ? 2.5 : 2,
+          strokeOpacity: depth === 1 ? 0.8 : 0.6,
+        },
+      });
+    }
+
+    let currentY = yStart;
+    if (item.children && item.children.length > 0 && depth < MAX_DEPTH) {
+      const validChildren = item.children.slice(0, 8);
+      validChildren.forEach((child) => {
+        currentY = addNode(child, nodeId, depth + 1, branchColor, currentY);
+      });
+    } else if (depth < MAX_DEPTH) {
+      currentY = yStart + NODE_HEIGHT + NodeGap;
+    }
+
+    return currentY;
+  }
+
+  const rootBranchColor = BRANCH_COLORS[0].accent;
+
+  if (mindMapData.children && mindMapData.children.length > 0) {
+    const validChildren = mindMapData.children.slice(0, 8);
+    let yStart = ROOT_PADDING_TOP;
+
+    const rootNodeId = mindMapData.id;
+    nodesList.push({
+      id: rootNodeId,
+      type: "mindMapNode",
+      position: {
+        x: ROOT_X,
+        y: RootCenterYForChildren(validChildren, yStart),
+      },
+      data: {
+        label: mindMapData.label,
+        isRoot: true,
+        depth: 0,
+        branchColor: rootBranchColor,
+        childCount: validChildren.length,
+      },
+    });
+
+    validChildren.forEach((child, idx) => {
+      const color = BRANCH_COLORS[idx % BRANCH_COLORS.length];
+      yStart = addNode(child, rootNodeId, 1, color.accent, yStart);
+    });
+  } else {
+    nodesList.push({
+      id: mindMapData.id,
+      type: "mindMapNode",
+      position: { x: ROOT_X, y: ROOT_PADDING_TOP + 100 },
+      data: {
+        label: mindMapData.label,
+        isRoot: true,
+        depth: 0,
+        branchColor: rootBranchColor,
+        childCount: 0,
+      },
+    });
+  }
+
+  if (mindMapData.relations) {
+    mindMapData.relations.forEach((relation, index) => {
+      edgesList.push({
+        id: `rel-${index}`,
+        source: relation.source,
+        target: relation.target,
+        type: "relation",
+        style: {
+          stroke: RELATION_COLORS[relation.type] || "#7c8a9a",
+          strokeWidth: 1.5,
+          strokeDasharray: "6,4",
+          strokeOpacity: 0.6,
+        },
+        data: { relation },
+      });
+    });
+  }
+
+  return { nodes: nodesList, edges: edgesList };
+}
+
+export const MindMapViewer: FC<MindMapViewerProps> = ({
   data,
   fileId,
   onNodeClick,
 }) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
-  const [relations, setRelations] = useState<RelationData[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<AppEdge>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -299,196 +465,37 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
     message: string;
     percentage: number;
   } | null>(null);
-
-  const [layoutConfig, setLayoutConfig] = useState({
-    levelSpacing: 280,
-    nodeGap: 70,
-    maxNodeWidth: 320,
-  });
-
-  const MAX_DEPTH = 5;
-  const NODE_HEIGHT = 56;
-  const ROOT_X = 120;
-  const ROOT_PADDING_TOP = 120;
-
-  const estimateNodeWidth = useCallback(
-    (label: string, isRoot: boolean, depth: number): number => {
-      const charWidth = isRoot ? 9 : 8;
-      const padding = isRoot ? 64 : 48;
-      return Math.min(
-        layoutConfig.maxNodeWidth,
-        Math.max(isRoot ? 220 : 140, label.length * charWidth + padding),
-      );
-    },
-    [layoutConfig.maxNodeWidth],
-  );
-
-  const calculateSubtreeHeight = useCallback(
-    (item: MindMapData, itemDepth: number = 0): number => {
-      if (!item.children || item.children.length === 0) {
-        return NODE_HEIGHT + layoutConfig.nodeGap;
-      }
-      const childrenHeight = item.children
-        .slice(0, 8)
-        .reduce(
-          (acc, child) => acc + calculateSubtreeHeight(child, itemDepth + 1),
-          0,
-        );
-      return Math.max(NODE_HEIGHT + layoutConfig.nodeGap, childrenHeight);
-    },
-    [layoutConfig.nodeGap],
-  );
-
-  const convertToNodesAndEdges = useCallback(
-    (mindMapData: MindMapData | null): { nodes: Node[]; edges: Edge[] } => {
-      if (!mindMapData) return { nodes: [], edges: [] };
-
-      const nodesList: Node[] = [];
-      const edgesList: Edge[] = [];
-      const { levelSpacing, nodeGap } = layoutConfig;
-
-      const addNode = (
-        item: MindMapData,
-        parentId: string | null,
-        depth: number,
-        branchColor: string,
-        yStart: number,
-      ): number => {
-        if (depth > MAX_DEPTH) return yStart;
-
-        const nodeId = item.id;
-        const isRoot = depth === 0;
-        const nodeWidth = estimateNodeWidth(item.label, isRoot, depth);
-
-        const subtreeHeight = calculateSubtreeHeight(item, depth);
-        const y = yStart + subtreeHeight / 2;
-
-        nodesList.push({
-          id: nodeId,
-          type: "mindMapNode",
-          position: { x: ROOT_X + depth * levelSpacing, y },
-          data: {
-            label: item.label,
-            isRoot,
-            depth,
-            branchColor,
-            childCount: item.children?.length || 0,
-          },
-        });
-
-        if (parentId && !isRoot) {
-          edgesList.push({
-            id: `e-${parentId}-${nodeId}`,
-            source: parentId,
-            target: nodeId,
-            type: "default",
-            animated: false,
-            style: {
-              stroke: branchColor,
-              strokeWidth: depth === 1 ? 2.5 : 2,
-              strokeOpacity: depth === 1 ? 0.8 : 0.6,
-            },
-          });
-        }
-
-        let currentY = yStart;
-        if (item.children && item.children.length > 0 && depth < MAX_DEPTH) {
-          const validChildren = item.children.slice(0, 8);
-          validChildren.forEach((child) => {
-            currentY = addNode(child, nodeId, depth + 1, branchColor, currentY);
-          });
-        } else if (depth < MAX_DEPTH) {
-          currentY = yStart + NODE_HEIGHT + nodeGap;
-        }
-
-        return currentY;
-      };
-
-      const totalHeight = calculateSubtreeHeight(mindMapData);
-      const rootBranchColor = BRANCH_COLORS[0].accent;
-
-      if (mindMapData.children && mindMapData.children.length > 0) {
-        const validChildren = mindMapData.children.slice(0, 8);
-        let yStart = ROOT_PADDING_TOP;
-
-        const rootNodeId = mindMapData.id;
-        nodesList.push({
-          id: rootNodeId,
-          type: "mindMapNode",
-          position: {
-            x: ROOT_X,
-            y: RootCenterYForChildren(validChildren, yStart),
-          },
-          data: {
-            label: mindMapData.label,
-            isRoot: true,
-            depth: 0,
-            branchColor: rootBranchColor,
-            childCount: validChildren.length,
-          },
-        });
-
-        validChildren.forEach((child, idx) => {
-          const color = BRANCH_COLORS[idx % BRANCH_COLORS.length];
-          yStart = addNode(child, rootNodeId, 1, color.accent, yStart);
-        });
-      } else {
-        nodesList.push({
-          id: mindMapData.id,
-          type: "mindMapNode",
-          position: { x: ROOT_X, y: ROOT_PADDING_TOP + 100 },
-          data: {
-            label: mindMapData.label,
-            isRoot: true,
-            depth: 0,
-            branchColor: rootBranchColor,
-            childCount: 0,
-          },
-        });
-      }
-
-      if (mindMapData.relations) {
-        mindMapData.relations.forEach((relation, index) => {
-          edgesList.push({
-            id: `rel-${index}`,
-            source: relation.source,
-            target: relation.target,
-            type: "relation",
-            style: {
-              stroke: RELATION_COLORS[relation.type] || "#7c8a9a",
-              strokeWidth: 1.5,
-              strokeDasharray: "6,4",
-              strokeOpacity: 0.6,
-            },
-            data: relation,
-          });
-        });
-      }
-
-      return { nodes: nodesList, edges: edgesList };
-    },
-    [layoutConfig, calculateSubtreeHeight, estimateNodeWidth],
-  );
-
-  const RootCenterYForChildren = (
-    children: MindMapData[],
-    yStart: number,
-  ): number => {
-    let total = 0;
-    children.slice(0, 8).forEach((child) => {
-      total += calculateSubtreeHeight(child);
-    });
-    return yStart + total / 2;
-  };
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateMsg, setRegenerateMsg] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useMemo(() => {
     const { nodes: newNodes, edges: newEdges } = convertToNodesAndEdges(data);
     setNodes(newNodes);
     setEdges(newEdges);
-    if (data?.relations) {
-      setRelations(data.relations);
-    }
-  }, [data, convertToNodesAndEdges, setNodes, setEdges]);
+  }, [data, setNodes, setEdges]);
+
+  const nodeCount = useMemo(() => {
+    const countByDepth = (d: MindMapData): number => {
+      let c = 1;
+      d.children?.forEach((ch) => {
+        c += countByDepth(ch);
+      });
+      return c;
+    };
+    return data ? countByDepth(data) : 0;
+  }, [data]);
+
+  const filteredNodeIds = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    const q = searchQuery.toLowerCase();
+    return nodes
+      .filter((n) => {
+        const label = String(n.data?.label || "").toLowerCase();
+        return label.includes(q);
+      })
+      .map((n) => n.id);
+  }, [searchQuery, nodes]);
 
   const analyzeRelations = useCallback(async () => {
     if (!fileId) return;
@@ -508,8 +515,7 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
       setProgress({ message: "正在生成连接...", percentage: 80 });
 
       if (result.success) {
-        setRelations(result.relations);
-        const relationEdges: Edge[] = result.relations.map(
+        const relationEdges: AppEdge[] = result.relations.map(
           (rel: RelationData, index: number) => ({
             id: `rel-${index}`,
             source: rel.source,
@@ -521,7 +527,7 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
               strokeDasharray: "6,4",
               strokeOpacity: 0.6,
             },
-            data: rel,
+            data: { relation: rel },
           }),
         );
 
@@ -662,7 +668,7 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
               strokeDasharray: "6,4",
               strokeOpacity: 0.6,
             },
-            data: newRelation,
+            data: { relation: newRelation },
           },
         ]);
       }
@@ -703,6 +709,7 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
 
   const handleConnect = useCallback(
     (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
       const newRelation: RelationData = {
         id: `rel_${Date.now()}`,
         source: connection.source,
@@ -711,22 +718,22 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
         description: "相关",
       };
 
-      setEdges((prev) =>
-        addEdge(
-          {
-            ...connection,
-            type: "relation",
-            style: {
-              stroke: "#7c8a9a",
-              strokeWidth: 1.5,
-              strokeDasharray: "6,4",
-              strokeOpacity: 0.6,
-            },
-            data: newRelation,
+      setEdges((prev) => [
+        ...prev,
+        {
+          id: newRelation.id,
+          source: newRelation.source,
+          target: newRelation.target,
+          type: "relation",
+          style: {
+            stroke: "#7c8a9a",
+            strokeWidth: 1.5,
+            strokeDasharray: "6,4",
+            strokeOpacity: 0.6,
           },
-          prev,
-        ),
-      );
+          data: { relation: newRelation },
+        },
+      ]);
     },
     [setEdges],
   );
@@ -778,36 +785,24 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
   }, []);
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
+    (_event: ReactMouseEvent, node: AppNode) => {
       setSelectedNode(node.id);
       setSelectedEdge(null);
       if (onNodeClick) {
-        onNodeClick(node.id, String(node.data?.label));
+        onNodeClick(node.id, node.data?.label || "");
       }
     },
     [onNodeClick],
   );
 
-  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
-    event.stopPropagation();
-    setSelectedEdge(edge.id);
-    setSelectedNode(null);
-  }, []);
-
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [regenerateMsg, setRegenerateMsg] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const nodeCount = useMemo(() => {
-    const countByDepth = (d: MindMapData): number => {
-      let c = 1;
-      d.children?.forEach((ch) => {
-        c += countByDepth(ch as MindMapData);
-      });
-      return c;
-    };
-    return data ? countByDepth(data) : 0;
-  }, [data]);
+  const onEdgeClick = useCallback(
+    (event: ReactMouseEvent, edge: AppEdge) => {
+      event.stopPropagation();
+      setSelectedEdge(edge.id);
+      setSelectedNode(null);
+    },
+    [],
+  );
 
   const handleRegenerate = useCallback(async () => {
     if (!fileId) return;
@@ -846,17 +841,6 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
       setIsRegenerating(false);
     }
   }, [fileId]);
-
-  const filteredNodeIds = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    const q = searchQuery.toLowerCase();
-    return nodes
-      .filter((n) => {
-        const label = String(n.data?.label || "").toLowerCase();
-        return label.includes(q);
-      })
-      .map((n) => n.id);
-  }, [searchQuery, nodes]);
 
   if (!data) {
     return (
@@ -904,20 +888,17 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
           onNodeClick={handleNodeClick}
           onEdgeClick={onEdgeClick}
           nodeTypes={{
-            mindMapNode: (props: NodeProps) => (
-              <MindMapNode {...props} maxWidth={layoutConfig.maxNodeWidth} />
-            ),
+            mindMapNode: MindMapNode as never,
           }}
           edgeTypes={{
-            ...edgeTypes,
-            default: BezierEdge as any,
+            relation: RelationEdge as never,
+            default: BezierEdge as never,
           }}
           fitView
           fitViewOptions={{ padding: 0.3, minZoom: 0.2, maxZoom: 1.5 }}
           minZoom={0.15}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
-          connectable={true}
           defaultEdgeOptions={{
             type: "default",
           }}
@@ -934,7 +915,7 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
           />
           <MiniMap
             nodeColor={(n) => {
-              const d = n.data as unknown as MindMapNodeData;
+              const d = n.data as MindMapNodeData | undefined;
               if (d?.isRoot) return "#4a3f6b";
               return d?.branchColor || "#c4a2d4";
             }}
@@ -984,7 +965,6 @@ export const MindMapViewer: React.FC<MindMapViewerProps> = ({
         </div>
       )}
 
-      {/* 统一顶部工具栏 */}
       <div
         className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 gap-3"
         style={{

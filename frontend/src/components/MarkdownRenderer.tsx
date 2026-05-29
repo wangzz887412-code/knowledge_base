@@ -160,9 +160,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '');
-            return !inline && match ? (
+            const isInline = props.node?.tagName === 'code' || props.inline !== false;
+            return !isInline && match ? (
               <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto">
                 <code className={className} {...props}>
                   {children}

@@ -6,7 +6,7 @@
 在运行后端的终端窗口中查看实时日志输出：
 
 ```bash
-cd D:\trae\knowledge_base2.0\backend
+cd backend
 python manage.py runserver
 ```
 
@@ -38,11 +38,8 @@ python manage.py runserver
 ```
 [FILE_PROCESSING] ============================================================
 [FILE_PROCESSING] 开始处理文件: test.txt (ID: 25)
-[FILE_PROCESSING] 用户: wzz
-[FILE_PROCESSING] 用户AI配置: {'model_id': 'ollama:qwen3.5:0.8b', ...}
-[FILE_PROCESSING] ============================================================
 [FILE_PROCESSING] 阶段1: 开始提取文本...
-[FILE_PROCESSING] 文件路径: D:\...\files\25\test.txt
+[FILE_PROCESSING] 文件路径: .../files/25/test.txt
 [FILE_PROCESSING] ✓ TXT/MD文本提取成功，长度: 1234 字符
 [FILE_PROCESSING] ✓ 文本提取完成，总长度: 1234 字符
 [FILE_PROCESSING] 阶段2: 开始生成AI摘要...
@@ -90,7 +87,7 @@ python manage.py runserver
 [AI_SUMMARY] 提供商: OpenAI
 [AI_SUMMARY] 需要API密钥: True
 [AI_SUMMARY] ⚠ 模型需要API密钥但未提供
-[AI_SUMMARY] 用户 wzz 未配置API密钥，无法生成AI摘要
+[AI_SUMMARY] 用户未配置API密钥，无法生成AI摘要
 ```
 
 #### 情况2: AI服务调用失败

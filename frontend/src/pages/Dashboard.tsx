@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
+import { usePetTask } from "../contexts/TaskContext";
 import { Sidebar } from "../components/Sidebar";
 import { FileCard, FileCardSkeleton } from "../components/FileCard";
 import { UploadZone } from "../components/UploadZone";
@@ -48,6 +49,7 @@ interface QuickAction {
 
 const Dashboard: React.FC = () => {
   const { token } = useAuth();
+  const { setTaskStatus, clearTask } = usePetTask();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
@@ -129,6 +131,7 @@ const Dashboard: React.FC = () => {
     try {
       setUploadError(null);
       setUploadSuccess(null);
+      setTaskStatus("uploading", "正在上传文件...");
       const response = await axios.post(`${API_BASE}/files/files/`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -171,9 +174,11 @@ const Dashboard: React.FC = () => {
             setPollingInterval(null);
             setUploadProgress({ fileId, message: "完成！", percentage: 100 });
             setUploadSuccess(`文件 "${file.name}" 处理完成！AI摘要已生成。`);
+            setTaskStatus("completed", "任务完成！");
             setTimeout(() => {
               setUploadSuccess(null);
               setUploadProgress(null);
+              clearTask();
             }, 3000);
             fetchFiles();
           } else if (fileData.process_status === "failed") {
@@ -183,13 +188,22 @@ const Dashboard: React.FC = () => {
             setUploadError(
               `文件处理失败: ${fileData.process_message || "未知错误"}`,
             );
-            setTimeout(() => setUploadError(null), 5000);
+            setTaskStatus("failed", "处理失败");
+            setTimeout(() => {
+              setUploadError(null);
+              clearTask();
+            }, 5000);
           } else {
             setUploadProgress({
               fileId,
               message: fileData.process_message || "处理中...",
               percentage: Math.min(90, fileData.process_progress || 30),
             });
+            setTaskStatus(
+              "processing",
+              fileData.process_message || "处理中...",
+              Math.min(90, fileData.process_progress || 30),
+            );
           }
         } catch (error) {
           console.error("轮询进度失败:", error);
@@ -202,6 +216,8 @@ const Dashboard: React.FC = () => {
     } catch (error: any) {
       console.error("上传文件失败:", error);
       setUploadProgress(null);
+      setTaskStatus("failed", "上传失败");
+      setTimeout(() => clearTask(), 3000);
       if (error.response?.status === 401) {
         setUploadError("登录已过期，请重新登录");
       } else {

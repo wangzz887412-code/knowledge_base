@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo, type FC } from "react";
 import {
   ReactFlow,
   Node,
@@ -10,8 +10,8 @@ import {
   BezierEdge,
   Handle,
   Position,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 
 interface MindMapNode {
   name: string;
@@ -42,10 +42,7 @@ const mindMapData: MindMapNode = {
         },
         {
           name: "导出功能",
-          children: [
-            { name: "PNG格式导出" },
-            { name: "PDF格式导出" },
-          ],
+          children: [{ name: "PNG格式导出" }, { name: "PDF格式导出" }],
         },
       ],
     },
@@ -95,61 +92,68 @@ const mindMapData: MindMapNode = {
 };
 
 const BRANCH_COLORS = [
-  { bg: '#f0e6f6', border: '#c4a2d4', text: '#5c3d6e', accent: '#9b6fb0' },
-  { bg: '#e6f3f0', border: '#a2c4b8', text: '#3d5c4f', accent: '#6fa89a' },
-  { bg: '#fef3e4', border: '#dcc49e', text: '#6b5230', accent: '#c4984b' },
-  { bg: '#e8f0fe', border: '#a8c4e2', text: '#3d5270', accent: '#6b8fc4' },
-  { bg: '#fce8ea', border: '#e2a8ac', text: '#6b3d40', accent: '#c46b70' },
+  { bg: "#f0e6f6", border: "#c4a2d4", text: "#5c3d6e", accent: "#9b6fb0" },
+  { bg: "#e6f3f0", border: "#a2c4b8", text: "#3d5c4f", accent: "#6fa89a" },
+  { bg: "#fef3e4", border: "#dcc49e", text: "#6b5230", accent: "#c4984b" },
+  { bg: "#e8f0fe", border: "#a8c4e2", text: "#3d5270", accent: "#6b8fc4" },
+  { bg: "#fce8ea", border: "#e2a8ac", text: "#6b3d40", accent: "#c46b70" },
 ];
 
 const ROOT_COLOR = {
-  bg: '#4a3f6b',
-  border: '#6c5fa7',
-  text: '#ffffff',
-  accent: '#7c6fb8',
-  glow: 'rgba(108, 95, 167, 0.4)',
+  bg: "#4a3f6b",
+  border: "#6c5fa7",
+  text: "#ffffff",
+  accent: "#7c6fb8",
+  glow: "rgba(108, 95, 167, 0.4)",
 };
 
-const MindMapCustomNode: React.FC<{
-  data: { label: string; isRoot?: boolean; depth?: number; branchColor?: string };
+const MindMapCustomNode: FC<{
+  data: {
+    label: string;
+    isRoot?: boolean;
+    depth?: number;
+    branchColor?: string;
+  };
   selected?: boolean;
 }> = ({ data, selected }) => {
   const isRoot = data.isRoot;
   const depth = data.depth || 0;
-  const branchColor = data.branchColor || '#c4a2d4';
+  const branchColor = data.branchColor || "#c4a2d4";
 
   return (
     <div
       style={{
-        position: 'relative',
-        padding: isRoot ? '16px 28px' : depth === 1 ? '12px 22px' : '9px 16px',
-        borderRadius: isRoot ? '16px' : '12px',
-        background: isRoot ? ROOT_COLOR.bg : selected ? '#e8e0ef' : '#faf8fc',
-        border: isRoot ? `2px solid ${ROOT_COLOR.border}` : `1.5px solid ${selected ? '#8b6fc0' : branchColor}`,
-        color: isRoot ? ROOT_COLOR.text : '#3d3648',
-        cursor: 'pointer',
-        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        position: "relative",
+        padding: isRoot ? "16px 28px" : depth === 1 ? "12px 22px" : "9px 16px",
+        borderRadius: isRoot ? "16px" : "12px",
+        background: isRoot ? ROOT_COLOR.bg : selected ? "#e8e0ef" : "#faf8fc",
+        border: isRoot
+          ? `2px solid ${ROOT_COLOR.border}`
+          : `1.5px solid ${selected ? "#8b6fc0" : branchColor}`,
+        color: isRoot ? ROOT_COLOR.text : "#3d3648",
+        cursor: "pointer",
+        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         boxShadow: isRoot
           ? `0 4px 24px ${ROOT_COLOR.glow}, 0 2px 8px rgba(74, 63, 107, 0.3)`
           : selected
-          ? '0 2px 16px rgba(139, 111, 192, 0.25), 0 1px 4px rgba(0,0,0,0.06)'
-          : '0 1px 4px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            ? "0 2px 16px rgba(139, 111, 192, 0.25), 0 1px 4px rgba(0,0,0,0.06)"
+            : "0 1px 4px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
         fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-        fontSize: isRoot ? '18px' : depth === 1 ? '15px' : '13px',
+        fontSize: isRoot ? "18px" : depth === 1 ? "15px" : "13px",
         fontWeight: isRoot ? 700 : depth === 1 ? 600 : 500,
         lineHeight: 1.5,
-        letterSpacing: isRoot ? '0.02em' : '0.01em',
-        wordBreak: 'break-word',
+        letterSpacing: isRoot ? "0.02em" : "0.01em",
+        wordBreak: "break-word",
       }}
     >
       <div
         style={{
-          position: 'absolute',
+          position: "absolute",
           left: 0,
           top: isRoot ? 8 : 5,
           bottom: isRoot ? 8 : 5,
           width: 4,
-          borderRadius: '0 2px 2px 0',
+          borderRadius: "0 2px 2px 0",
           background: isRoot ? ROOT_COLOR.accent : branchColor,
         }}
       />
@@ -158,7 +162,7 @@ const MindMapCustomNode: React.FC<{
         position={Position.Right}
         style={{
           background: isRoot ? ROOT_COLOR.accent : branchColor,
-          border: '2px solid #fff',
+          border: "2px solid #fff",
           width: 10,
           height: 10,
         }}
@@ -167,8 +171,8 @@ const MindMapCustomNode: React.FC<{
         type="target"
         position={Position.Left}
         style={{
-          background: '#a39bb5',
-          border: '2px solid #fff',
+          background: "#a39bb5",
+          border: "2px solid #fff",
           width: 10,
           height: 10,
         }}
@@ -177,12 +181,12 @@ const MindMapCustomNode: React.FC<{
       {isRoot && (
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: -6,
             right: -6,
             width: 12,
             height: 12,
-            borderRadius: '50%',
+            borderRadius: "50%",
             background: ROOT_COLOR.accent,
             boxShadow: `0 0 8px ${ROOT_COLOR.glow}`,
           }}
@@ -196,7 +200,9 @@ interface MindMapRendererProps {
   data?: MindMapNode;
 }
 
-export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMapData }) => {
+export const MindMapRenderer: FC<MindMapRendererProps> = ({
+  data = mindMapData,
+}) => {
   const { nodes, edges } = useMemo(() => {
     const nodesList: Node[] = [];
     const edgesList: Edge[] = [];
@@ -217,7 +223,7 @@ export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMap
       index: number,
       branchIndex: number,
       parentX: number = ROOT_X,
-      parentY: number = ROOT_Y
+      parentY: number = ROOT_Y,
     ) => {
       if (level > MAX_DEPTH) return;
 
@@ -244,7 +250,7 @@ export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMap
 
       nodesList.push({
         id: nodeId,
-        type: 'mindMapNode',
+        type: "mindMapNode",
         position: { x, y },
         data: {
           label: item.name,
@@ -259,7 +265,7 @@ export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMap
           id: `edge-${parentId}-${nodeId}`,
           source: parentId,
           target: nodeId,
-          type: 'default',
+          type: "default",
           style: {
             stroke: color.accent,
             strokeWidth: level === 1 ? 2.5 : 2,
@@ -281,8 +287,8 @@ export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMap
     return { nodes: nodesList, edges: edgesList };
   }, [data]);
 
-  const [nodesState, setNodes, onNodesChange] = useNodesState(nodes);
-  const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges);
+  const [nodesState, , onNodesChange] = useNodesState(nodes);
+  const [edgesState, , onEdgesChange] = useEdgesState(edges);
 
   return (
     <div className="w-full h-[600px] rounded-xl overflow-hidden">
@@ -291,20 +297,20 @@ export const MindMapRenderer: React.FC<MindMapRendererProps> = ({ data = mindMap
         edges={edgesState}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        nodeTypes={{ mindMapNode: MindMapCustomNode as any }}
-        edgeTypes={{ default: BezierEdge as any }}
+        nodeTypes={{ mindMapNode: MindMapCustomNode as never }}
+        edgeTypes={{ default: BezierEdge as never }}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{ type: 'default' }}
+        defaultEdgeOptions={{ type: "default" }}
       >
         <Background
           color="#e8e3ed"
           gap={20}
           size={1}
-          style={{ backgroundColor: '#faf8f5' }}
+          style={{ backgroundColor: "#faf8f5" }}
         />
         <Controls
           showInteractive={false}

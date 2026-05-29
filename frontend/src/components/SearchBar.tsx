@@ -29,11 +29,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onResultClick }) => {
   const [showResults, setShowResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
   const [totalResults, setTotalResults] = useState(0);
   
   const searchRef = useRef<HTMLDivElement>(null);
-  const debounceTimer = useRef<NodeJS.Timeout>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -69,7 +68,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onResultClick }) => {
         setResults([]);
       } else {
         setResults(response.data.results || []);
-        setTotalPages(response.data.total_pages || 0);
         setTotalResults(response.data.total || 0);
         setShowResults(true);
       }

@@ -1,3 +1,88 @@
+# 更新日志 v2.2
+
+## 📅 更新日期
+2026-05-29
+
+## ✨ 新增功能
+
+### 1. 忘记密码 / 密码重置
+- **新增忘记密码页面**：`frontend/src/pages/ForgotPasswordPage.tsx`
+- **新增密码重置 Token 模型**：`backend/apps/users/models.py` - `PasswordResetToken`
+  - UUID Token 生成，支持过期验证
+  - Token 使用后自动标记为已使用
+- **新增密码重置 API**：`POST /api/users/password-reset/`
+  - 输入用户名获取临时密码
+  - 临时密码登录后可在设置中修改
+- **登录页面新增"忘记密码"链接**
+
+### 2. 皮卡丘桌宠升级（DesktopPetV2）
+- **Canvas 精灵动画渲染**：替代旧版 CSS 动画，流畅度大幅提升
+- **新增模块化架构**：`frontend/src/components/pika-pet/`
+  - `index.tsx` - 桌宠主组件（DesktopPetV2）
+  - `PetSpriteCanvas.tsx` - Canvas 精灵动画渲染
+  - `usePetBehavior.ts` - 用户行为监视 Hook
+  - `config.ts` - 桌宠配置（动画帧数、FPS、超时设置）
+- **智能行为检测**：
+  - idle：空闲动画（6帧循环）
+  - idle-busy：忙碌模式（10秒内快速操作>5次，加速动画）
+  - sleep：浅睡（30秒无操作）
+  - sleep-deep：深睡（切换到其他标签页/失焦，速度减半）
+  - skill：技能动画（双击触发）
+- **与文件处理任务联动**：通过 TaskContext 感知上传和处理进度
+- **位置记忆**：通过 localStorage 持久化桌宠位置
+- **关闭按钮**：右上角 ✕ 按钮隐藏桌宠
+
+### 3. 任务上下文（TaskContext）
+- **新增 `frontend/src/contexts/TaskContext.tsx`**
+- 提供全局任务状态管理：idle / uploading / processing / completed / failed
+- 桌宠根据任务状态自动切换行为
+- 支持进度和消息传递
+
+## 📦 新增文件
+
+- `frontend/src/pages/ForgotPasswordPage.tsx` - 忘记密码页面
+- `frontend/src/components/pika-pet/index.tsx` - 皮卡丘桌宠主组件
+- `frontend/src/components/pika-pet/PetSpriteCanvas.tsx` - Canvas 精灵动画渲染
+- `frontend/src/components/pika-pet/usePetBehavior.ts` - 用户行为监视 Hook
+- `frontend/src/components/pika-pet/config.ts` - 桌宠配置
+- `frontend/src/components/pika-pet/README.md` - 桌宠模块说明
+- `frontend/src/contexts/TaskContext.tsx` - 任务上下文
+- `backend/apps/users/migrations/0003_passwordresettoken.py` - 密码重置 Token 迁移
+
+## 🔧 修改文件
+
+### 后端
+- `backend/apps/users/models.py` - 新增 PasswordResetToken 模型
+- `backend/apps/users/serializers.py` - 新增密码重置序列化器
+- `backend/apps/users/urls.py` - 新增密码重置路由
+- `backend/apps/users/views.py` - 新增密码重置视图
+- `backend/.env.example` - 新增邮件配置示例
+
+### 前端
+- `frontend/src/App.tsx` - 使用 DesktopPetV2 + TaskProvider + ForgotPasswordPage 路由
+- `frontend/src/components/DesktopPet.tsx` - 旧版桌宠保留兼容
+- `frontend/src/components/MindMapViewer.tsx` - 思维导图优化
+- `frontend/src/components/MindMapRenderer.tsx` - 思维导图渲染优化
+- `frontend/src/components/FileCard.tsx` - 文件卡片优化
+- `frontend/src/components/SearchBar.tsx` - 搜索栏优化
+- `frontend/src/components/Sidebar.tsx` - 侧边栏优化
+- `frontend/src/components/MarkdownRenderer.tsx` - Markdown 渲染优化
+- `frontend/src/pages/Dashboard.tsx` - 仪表盘优化
+- `frontend/src/pages/LoginPage.tsx` - 新增忘记密码链接
+- `frontend/src/pages/StreamTestPage.tsx` - 流式测试页面
+- `frontend/src/index.css` - 样式更新
+- `frontend/tailwind.config.js` - Tailwind 配置更新
+- `frontend/package.json` - 依赖更新
+
+## 🔒 隐私保护
+
+- 移除 USER_GUIDE.md 中的用户名和密码信息
+- 移除 LOG_GUIDE.md 中的本地绝对路径和用户名
+- 所有 API 密钥和密码不会上传到仓库
+- 数据库文件和上传文件不会被追踪
+
+---
+
 # 更新日志 v2.0
 
 ## 📅 更新日期

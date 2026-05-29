@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const mockStreamResponse = `智谱开放平台（Zhipu AI）作为一家领先的大模型科技公司，其核心价值在于**"智能（智）"**与**"无限可能/篇章（谱）"**。
 

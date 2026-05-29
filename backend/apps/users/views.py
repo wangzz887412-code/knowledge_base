@@ -1,9 +1,16 @@
+import secrets
+import string
+
 from rest_framework import generics, permissions, status
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from .serializers import UserSerializer, RegisterSerializer
+from .serializers import (
+    UserSerializer,
+    RegisterSerializer,
+    PasswordResetRequestSerializer,
+)
 
 User = get_user_model()
 
@@ -48,3 +55,33 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = PasswordResetRequestSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data['username']
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({
+                'message': '该用户名不存在'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        alphabet = string.ascii_letters + string.digits
+        temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+
+        user.set_password(temp_password)
+        user.save()
+
+        Token.objects.filter(user=user).delete()
+
+        return Response({
+            'message': '密码已重置',
+            'temp_password': temp_password
+        }, status=status.HTTP_200_OK)

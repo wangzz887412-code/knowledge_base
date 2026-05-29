@@ -1,6 +1,21 @@
+import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"PasswordResetToken({self.user.username}, {self.token})"
 
 
 class User(AbstractUser):
